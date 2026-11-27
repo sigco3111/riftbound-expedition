@@ -181,7 +181,7 @@ function computeSynergy(ids) {
 const SKILL_DESC = { barrier: '등불 방벽: 파티 전체가 잠시 피해를 줄이는 방벽', heal: '치유: 파티와 등불을 회복', aoe: '범위 마법: 적 무리에 광역 피해와 감속', pull: '중력장: 적을 끌어당기고 늦춤', turret: '포탑 설치: 일정 시간 자동 사격', trap: '함정 설치: 밟으면 폭발하며 감속', volley: '연속 사격: 여러 발을 연달아 발사', dash: '돌진 타격: 적에게 뛰어들어 범위 피해', aura: '지휘 오라: 파티 공격 속도 +25% (5초)', gold: '보급' };
 let eraTab = 'all';
 function renderMenu() {
-  $('meta').textContent = `보유 엠버 ${save.embers} · 최고 웨이브 ${save.best} · 해금 ${save.unlocked.length}/21`;
+  $('meta').textContent = `보유 엠버 ${save.embers} · 최고 스테이지 ${save.best} · 해금 ${save.unlocked.length}/21`;
   const tabs = $('tabs'); tabs.innerHTML = '';
   [['all', '전체'], ['medieval', '중세'], ['modern', '현대'], ['space', '우주']].forEach(([k, n]) => { const b = document.createElement('button'); b.className = 'tab' + (eraTab === k ? ' on' : ''); b.textContent = n; b.onclick = () => { eraTab = k; renderMenu(); }; tabs.appendChild(b); });
   const grid = $('grid'); grid.innerHTML = '';
@@ -429,10 +429,18 @@ function end(win) {
   m.innerHTML = `<h1>등불이 꺼졌습니다</h1><p>도달 스테이지 ${G.wave} · 처치 ${G.kills} · 획득 엠버 ${gain}</p><button class="mbtn" id="again">다시 출정</button><br><button class="ghost" id="tomenu">영웅 선택으로</button>`;
   $('again').onclick = () => startGame(); $('tomenu').onclick = () => { m.classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden'); cleanup(); renderMenu(); };
 }
+const GRADES = [['낡은', 1, '#aaa'], ['쓸 만한', 1.5, '#7fd37f'], ['정교한', 2.2, '#6bb8ff'], ['희귀한', 3.2, '#c78bff'], ['유물', 4.5, '#ffb347']];
+const GEAR = [['무기', '공격력', g => { G.bonus.atk *= 1 + .03 * g[1]; }], ['방어구', '체력', g => { const k = 1 + .04 * g[1]; G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }], ['장신구', '공격 속도', g => { G.bonus.rate *= 1 + .025 * g[1]; }]];
+function rollGear() {
+  const r = Math.random() + G.wave * .03; const gi = r > 1.25 ? 4 : r > .95 ? 3 : r > .65 ? 2 : r > .3 ? 1 : 0;
+  const g = GRADES[gi], k = GEAR[Math.floor(Math.random() * 3)]; k[2](g);
+  (G.gear = G.gear || []).push(`${g[0]} ${k[0]}`);
+  return `<p style="color:${g[2]}">전리품: ${g[0]} ${k[0]} (${k[1]} +${Math.round((k[0] === '방어구' ? .04 : k[0] === '무기' ? .03 : .025) * g[1] * 100)}%)</p>`;
+}
 function offerUpgrade() {
   G.waveActive = false; G.paused = true;
   const pool = [...UPGRADES].sort(() => Math.random() - .5).slice(0, 3);
-  let extra = '';
+  let extra = rollGear();
   if (G.wave % 5 === 0) {
     const locked = HEROES.filter(h => !save.unlocked.includes(h.id)).slice(0, 3);
     locked.forEach(h => save.unlocked.push(h.id)); G.earned += 25; persist();
@@ -441,7 +449,7 @@ function offerUpgrade() {
     if (G.wave === 25 && !G.won) { G.won = true; extra += '<p style="color:#8fe0ff">등불의 심장을 지켜냈습니다! 계속하면 무한 모드입니다.</p>'; }
   }
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>강화를 하나 고르세요</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}</b><br>${u.desc}</button>`).join('');
+  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>보스 격파. 강화 카드를 하나 고르세요 (획득 장비 ${(G.gear || []).length}개)</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}</b><br>${u.desc}</button>`).join('');
   m.querySelectorAll('.opt').forEach(b => b.onclick = () => { pool[+b.dataset.i].apply(G); m.classList.add('hidden'); G.paused = false; nextWave(); });
 }
 
