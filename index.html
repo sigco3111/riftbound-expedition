@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>균열 원정대 (Riftbound Expedition)</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{"imports":{"three":"./lib/three.module.min.js","three/addons/":"./lib/addons/"}}
+</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud" class="hidden">
+  <div id="top">
+    <div id="waveBox">웨이브 <b id="wave">0</b></div>
+    <div id="lanternBar"><div id="lanternFill"></div><span id="lanternTxt"></span></div>
+    <div id="infoBox">처치 <b id="kills">0</b> · 엠버 <b id="embers">0</b></div>
+    <button id="modeBtn">수동</button>
+  </div>
+  <div id="synergy"></div>
+  <div id="party"></div>
+  <div id="bossBar" class="hidden"><div id="bossName"></div><div class="bar"><div id="bossFill"></div></div></div>
+  <div id="stick" class="hidden"><div id="knob"></div></div>
+  <div id="toast"></div>
+</div>
+<div id="menu" class="panel">
+  <h1 id="title">균열 원정대 (Riftbound Expedition)</h1>
+  <p class="sub">어둠이 중세, 현대, 우주의 시대를 삼킨 뒤, 마지막 등불 아래 모인 21인의 생존자.</p>
+  <div id="meta"></div>
+  <div id="grid"></div>
+  <div id="preview"></div>
+  <div class="row"><button id="startBtn" disabled>출정 (파티 5인을 고르세요)</button><button id="resetBtn" class="ghost">저장 초기화</button></div>
+  <p class="help">조작: 수동 모드에서 WASD/방향키(모바일은 왼쪽 아래 조이스틱)로 선두를 움직이고, Space로 위임/수동을 바꿉니다. 나머지는 자동 전투입니다.</p>
+  <details><summary>크레딧과 라이선스</summary><div id="credits"></div></details>
+</div>
+<div id="modal" class="panel hidden"></div>
+<div id="loading" class="hidden">불러오는 중…</div>
+<script type="module" src="main.js"></script>
+</body>
+</html>
