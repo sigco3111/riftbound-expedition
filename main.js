@@ -236,7 +236,7 @@ async function startGame() {
   $('loading').classList.remove('hidden');
   if (G) cleanup();
   const S = computeSynergy(selected);
-  G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null };
+  G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, xp: 0, level: 1, pendingCards: 0, cardStack: {}, holdCount: 0, st: { downs: 0, minHp: 1, t: 0 }, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null };
   for (let i = 0; i < selected.length; i++) {
     const def = heroById[selected[i]]; const gltf = await loadModel(def.file);
     const inst = makeInstance(gltf, 1.75, 'y', 0);
@@ -271,7 +271,7 @@ function toast(t) { const e = $('toast'); e.textContent = t; e.style.opacity = 1
 function updateHUD() {
   $('wave').textContent = G.wave; $('kills').textContent = G.kills; $('embers').textContent = G.earned;
   $('lanternFill').style.width = Math.min(100, G.packsDone / 4 * 100) + '%';
-  $('lanternTxt').textContent = `${ZONES[Math.max(0, Math.floor((G.wave - 1) / 5)) % 5].name} · 불꽃 ×${G.flames} · ${Math.min(G.packNo, 3)}/3 무리${G.packsDone >= 4 ? ' · 보스 격파' : ''}`;
+  $('lanternTxt').textContent = `${ZONES[Math.max(0, Math.floor((G.wave - 1) / 5)) % 5].name} · 불꽃 ×${G.flames} · ${Math.min(G.packNo, 3)}/3 무리${G.packsDone >= 4 ? ' · 보스 격파' : ''} · Lv${G.level} (${Math.floor(G.xp)}/${xpNeed(G.level)})`;
   G.heroes.forEach(h => { h.ui.classList.toggle('dead', !h.alive); h.ui.querySelector('.hp').style.width = Math.max(0, h.hp / h.maxhp * 100) + '%'; const cdv = 1 - Math.max(0, h.skCd) / (h.def.skill.cd * G.S.cdr * G.bonus.cdr); h.ui.querySelector('.cd').style.width = Math.min(100, cdv * 100) + '%'; });
   $('modeBtn').textContent = manual ? '수동 (Space)' : '위임 (Space)';
   if (G.boss && G.boss.alive) { $('bossBar').classList.remove('hidden'); $('bossName').textContent = G.boss.def.name; $('bossFill').style.width = Math.max(0, G.boss.hp / G.boss.maxhp * 100) + '%'; } else $('bossBar').classList.add('hidden');
@@ -308,6 +308,7 @@ const WALK = 3.4;
 const CEN = new THREE.Vector3(), EAST = new THREE.Vector3(1, 0, 0);
 // ----- stage flow: march along the road -> 3 packs -> stage boss -> relight -> pick a boon -> next stage -----
 async function beginStage() {
+  G.st = { downs: 0, minHp: 1, t: 0 };
   const zi = Math.floor((G.wave - 1) / 5);
   if (G.zone !== zi) { G.zone = zi; buildWorld(zi); if ((G.wave - 1) % 5 === 0) setTimeout(() => toast(`구역 ${zi % 5 + 1}: ${ZONES[zi % 5].name}`), 1700); }
   const all = waveComposition(G.wave), per = Math.ceil(all.length / 3);
@@ -368,7 +369,7 @@ function spawnEnemy(key) {
 function nearest(list, p, maxd = 1e9) { let b = null, bd = maxd; for (const o of list) { if (o.alive === false) continue; const dd = o.pos.distanceTo(p); if (dd < bd) { bd = dd; b = o; } } return b; }
 function damageEnemy(e, dmg) {
   if (!e.alive) return; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg);
-  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb); G.earned += gain; if (e.inst.cur) e.inst.cur.paused = true; }
+  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.1, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
 }
 const dmgLayer = document.createElement('div'); dmgLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden'; document.body.appendChild(dmgLayer);
 function dmgText(pos, dmg) {
@@ -379,7 +380,7 @@ function dmgText(pos, dmg) {
 }
 function damageHero(h, dmg) {
   if (!h.alive) return; h.hp -= dmg * G.S.taken;
-  if (h.hp <= 0) { h.hp = 0; h.alive = false; play(h.inst, h.clips.die, { loop: false }); }
+  if (h.hp <= 0) { h.hp = 0; h.alive = false; G.st.downs++; play(h.inst, h.clips.die, { loop: false }); }
   else if (h.busy <= 0 && Math.random() < .15) { h.busy = .4; play(h.inst, h.clips.hit, { loop: false }); }
 }
 function after(t, fn) { G.timers.push({ t, fn }); }
@@ -392,7 +393,7 @@ function shoot(from, to, dmg, color, onHit) {
   m.position.set(from.x, 1.2, from.z); scene.add(m);
   G.proj.push({ mesh: m, target: to, dmg, speed: 26, onHit });
 }
-const teamAtk = h => h.def.dmg * G.bonus.atk * G.S.dmg * (h.def.ranged ? G.S.ranged : 1);
+const teamAtk = h => h.def.dmg * (h.mul || 1) * G.bonus.atk * G.S.dmg * (h.def.ranged ? G.S.ranged : 1);
 
 function heroAttack(h, tgt) {
   const d = h.def; const clip = h.attackClips[Math.floor(Math.random() * h.attackClips.length)];
@@ -437,9 +438,36 @@ function rollGear() {
   (G.gear = G.gear || []).push(`${g[0]} ${k[0]}`);
   return `<p style="color:${g[2]}">전리품: ${g[0]} ${k[0]} (${k[1]} +${Math.round((k[0] === '방어구' ? .04 : k[0] === '무기' ? .03 : .025) * g[1] * 100)}%)</p>`;
 }
+const xpNeed = L => Math.round(14 * Math.pow(1.32, L - 1) + 5 * (L - 1));
+function addXp(x) { G.xp += x; let n = xpNeed(G.level); while (G.xp >= n) { G.xp -= n; G.level++; G.pendingCards++; toast(`레벨 ${G.level}`); n = xpNeed(G.level); } }
+// 레벨업 카드: 파티 공용 + 편성에 있는 역할별 카드. 같은 카드는 3번까지 중첩.
+function cardPool() {
+  const pool = [];
+  UPGRADES.forEach(u => pool.push({ id: 'p:' + u.name, name: u.name, desc: u.desc, apply: u.apply }));
+  const roles = [...new Set(G.heroes.map(h => h.def.role))];
+  for (const r of roles) {
+    const rn = G.heroes.find(h => h.def.role === r).def.roleName;
+    pool.push({ id: 'a:' + r, name: `${rn} 단련`, desc: `${rn} 역할 영웅 공격력 +25%`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => h.mul = (h.mul || 1) * 1.25) });
+    pool.push({ id: 'h:' + r, name: `${rn} 강건`, desc: `${rn} 역할 영웅 체력 +25%`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => { h.maxhp *= 1.25; h.hp *= 1.25; }) });
+  }
+  pool.push({ id: 'p:xp', name: '배움의 불꽃', desc: '경험치 +20%', apply: G => G.bonus.xp = (G.bonus.xp || 1) * 1.2 });
+  return pool.filter(c => (G.cardStack[c.id] || 0) < 3);
+}
+function openCards() {
+  if (G.pendingCards <= 0) return; G.pendingCards--; G.paused = true;
+  const pool = cardPool().sort(() => Math.random() - .5).slice(0, 3); if (!pool.length) { G.paused = false; return; }
+  const m = $('modal'); m.classList.remove('hidden');
+  m.innerHTML = `<h1>레벨 ${G.level}</h1><p>강화 카드를 하나 고르세요</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}${G.cardStack[u.id] ? ' (' + (G.cardStack[u.id] + 1) + '단계)' : ''}</b><br>${u.desc}</button>`).join('');
+  m.querySelectorAll('.opt').forEach(b => b.onclick = () => { const c = pool[+b.dataset.i]; c.apply(G); G.cardStack[c.id] = (G.cardStack[c.id] || 0) + 1; m.classList.add('hidden'); G.paused = false; });
+}
+// 보스 뒤 위험도: 전멸 횟수, 최저 체력, 소요 시간으로 계산
+function danger(next) {
+  const st = G.st; let sc = st.downs * 1.4 + (st.minHp < .3 ? 2 : st.minHp < .5 ? 1 : st.minHp < .65 ? .4 : 0) + (st.t > 170 ? .6 : 0) + (next ? .5 : 0);
+  return sc >= 2.2 ? ['치명적', 'DEADLY', '#ff6a5a'] : sc >= .9 ? ['위험', 'RISKY', '#ffb347'] : ['안전', 'SAFE', '#7fd37f'];
+}
+function stewardPush() { const d = danger(true)[1]; if (d === 'SAFE') return true; if (d === 'RISKY') return G.flames >= 2 || G.holdCount >= 2; return G.holdCount >= 3 + (3 - G.flames); }
 function offerUpgrade() {
   G.waveActive = false; G.paused = true;
-  const pool = [...UPGRADES].sort(() => Math.random() - .5).slice(0, 3);
   let extra = rollGear();
   if (G.wave % 5 === 0) {
     const locked = HEROES.filter(h => !save.unlocked.includes(h.id)).slice(0, 3);
@@ -448,9 +476,13 @@ function offerUpgrade() {
     extra = `<p style="color:#ffd36b">구역 클리어: ${zn.name}. 엠버 +25${locked.length ? '<br>영웅 해금: ' + locked.map(h => h.name).join(', ') : ''}</p>`;
     if (G.wave === 25 && !G.won) { G.won = true; extra += '<p style="color:#8fe0ff">등불의 심장을 지켜냈습니다! 계속하면 무한 모드입니다.</p>'; }
   }
+  const dg = danger(true), rec = stewardPush();
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>보스 격파. 강화 카드를 하나 고르세요 (획득 장비 ${(G.gear || []).length}개)</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}</b><br>${u.desc}</button>`).join('');
-  m.querySelectorAll('.opt').forEach(b => b.onclick = () => { pool[+b.dataset.i].apply(G); m.classList.add('hidden'); G.paused = false; nextWave(); });
+  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>다음 구간 위험도: <b style="color:${dg[2]}">${dg[0]}</b> · 레벨 ${G.level}</p><button class="opt" data-go="1"><b>전진${rec ? ' (추천)' : ''}</b><br>다음 스테이지로 나아갑니다</button><button class="opt" data-go="0"><b>같은 구간 반복${rec ? '' : ' (추천)'}</b><br>경험치·엠버 80%, 장비와 경험치를 더 모읍니다</button><p id="cd" style="opacity:.7;font-size:12px"></p>`;
+  let done = false, t = 10; const cd = m.querySelector('#cd');
+  const go = push => { if (done) return; done = true; clearInterval(iv); m.classList.add('hidden'); G.paused = false; if (push) { G.holdCount = 0; nextWave(); } else { G.holdCount++; G.state = 'init'; beginStage(); } };
+  const iv = setInterval(() => { t--; if (cd) cd.textContent = `${t}초 뒤 추천 선택으로 진행`; if (t <= 0) go(rec); }, 1000);
+  m.querySelectorAll('.opt').forEach(b => b.onclick = () => go(b.dataset.go === '1'));
 }
 
 // ---------- loop ----------
@@ -464,6 +496,7 @@ function update(dt) {
   for (const t of G.timers) t.t -= dt; const due = G.timers.filter(t => t.t <= 0); G.timers = G.timers.filter(t => t.t > 0); due.forEach(t => t.fn());
   // spawning
   CEN.set(0, 0, roadZ(G.W)); stageFlow(dt);
+  { G.st.t += dt; const ht = G.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0) / Math.max(1, G.heroes.reduce((a, h) => a + h.maxhp, 0)); if (ht < G.st.minHp) G.st.minHp = ht; if (G.pendingCards > 0 && !G.paused && (G.state === 'walk' || G.state === 'breather')) openCards(); }
   if (G.waveActive && G.spawnQ.length) { G.spawnT -= dt; if (G.spawnT <= 0) { const k = G.spawnQ.shift(); spawnEnemy(k); G.spawnT = Math.max(.25, .9 - G.wave * .02); } }
   const living = G.heroes.filter(h => h.alive);
   // heroes
