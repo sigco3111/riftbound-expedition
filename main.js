@@ -21,27 +21,27 @@ const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
 const LOWQ = Q.get('q') === 'low';
-renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = .92;
 renderer.shadowMap.enabled = !LOWQ; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 var composer = null;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a1020);
-scene.fog = new THREE.FogExp2(0x1a2c4e, 0.02);
-const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
+scene.fog = new THREE.FogExp2(0x1a2c4e, 0.024);
+const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 260);
 const camOff = new THREE.Vector3(), camTarget = new THREE.Vector3();
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   const portrait = camera.aspect < 0.8;
-  camOff.set(0, portrait ? 19 : 13, portrait ? 12.5 : 10.5);
+  camOff.set(0, portrait ? 19 : 11, portrait ? 12.5 : 13.5);
   camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1);
   camera.updateProjectionMatrix();
   if (composer) composer.setSize(innerWidth, innerHeight);
 }
 addEventListener('resize', resize); resize();
-const hemi = new THREE.HemisphereLight(0x8aa4e8, 0x2a2840, 1.25); scene.add(hemi);
-const moon = new THREE.DirectionalLight(0xa8c0ff, 1.9); moon.position.set(-10, 20, 8); scene.add(moon);
+const hemi = new THREE.HemisphereLight(0x5a7ee8, 0x1c2040, 1.45); scene.add(hemi);
+const moon = new THREE.DirectionalLight(0x86a4ff, 2.6); moon.position.set(-10, 20, 8); scene.add(moon);
 const ARENA = 19;
 function skyTexture(top, bot) {
   const c = document.createElement('canvas'); c.width = 16; c.height = 512; const g = c.getContext('2d');
@@ -60,7 +60,7 @@ function groundTexture() {
   for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; g.beginPath(); g.moveTo(S / 2 + Math.cos(a) * S * .17, S / 2 + Math.sin(a) * S * .17); g.lineTo(S / 2 + Math.cos(a) * S * .26, S / 2 + Math.sin(a) * S * .26); g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
-const groundMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, envMapIntensity: 1.0 });
+const groundMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, envMapIntensity: 1.5 });
 {
   const g = new THREE.Mesh(new THREE.CircleGeometry(ARENA + 18, 64), groundMat);
   g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
@@ -114,9 +114,9 @@ const lantern = new THREE.Group();
 {
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(.12, .18, 3.2, 8), new THREE.MeshStandardMaterial({ color: 0x2b2b30 }));
   pole.position.y = 1.6; lantern.add(pole);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.4, 16, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc766).multiplyScalar(1.7) }));
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.3, 16, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc766).multiplyScalar(1.7) }));
   bulb.position.y = 3.5; lantern.add(bulb);
-  const light = new THREE.PointLight(0xffb066, 110, 22, 2); light.position.y = 3.6; light.castShadow = !LOWQ; light.shadow.mapSize.set(MOBILE ? 512 : 1024, MOBILE ? 512 : 1024); light.shadow.bias = -.002; light.shadow.camera.near = .5; light.shadow.camera.far = 30; lantern.add(light);
+  const light = new THREE.PointLight(0xffa860, 110, 22, 2); light.position.y = 3.6; light.castShadow = !LOWQ; light.shadow.mapSize.set(MOBILE ? 512 : 1024, MOBILE ? 512 : 1024); light.shadow.bias = -.002; light.shadow.camera.near = .5; light.shadow.camera.far = 30; lantern.add(light);
   lantern.userData = { bulb, light };
   scene.add(lantern);
 }

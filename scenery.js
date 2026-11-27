@@ -5,8 +5,8 @@ import * as THREE from 'three';
 export const MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 560;
 export const SZ = 76; // ground texture covers SZ x SZ world units
 const PAL = [ // per zone: grass rgb, mud rgb, puddle rgb
-  { gr: [54, 56, 30], mud: [62, 56, 50], pud: [26, 40, 66] },
-  { gr: [44, 52, 48], mud: [78, 78, 84], pud: [22, 40, 70] },
+  { gr: [40, 46, 36], mud: [58, 54, 52], pud: [26, 40, 66] },
+  { gr: [34, 46, 52], mud: [78, 78, 84], pud: [22, 40, 70] },
   { gr: [44, 40, 60], mud: [80, 68, 92], pud: [34, 30, 74] },
   { gr: [56, 36, 52], mud: [96, 60, 84], pud: [60, 24, 66] },
   { gr: [70, 60, 30], mud: [92, 78, 54], pud: [58, 48, 28] },
@@ -16,7 +16,7 @@ const vn = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi
 export const fbm = (x, y, o = 4) => { let s = 0, a = .5; for (let i = 0; i < o; i++) { s += a * vn(x, y); x *= 2.03; y *= 2.03; a *= .5; } return s; };
 const sm = (a, b, x) => { x = Math.min(1, Math.max(0, (x - a) / (b - a))); return x * x * (3 - 2 * x); };
 export const roadZ = x => .2 + Math.sin(x * .16 + .5) * 2.6 - x * .06; // road centre line z(x), passes the lantern clearing
-const CLEAR = 6.0;
+const CLEAR = 4.4;
 
 export function makeGround(zi) {
   const P = PAL[zi % PAL.length], N = MOBILE ? 512 : 1024;
@@ -63,7 +63,7 @@ function grassAssets() {
 export function makeGrass(zi, radius) {
   grassAssets();
   const P = PAL[zi % PAL.length], GN = MOBILE ? 3500 : 9000;
-  const mat = new THREE.MeshStandardMaterial({ map: grassTex, alphaTest: .45, side: THREE.DoubleSide, roughness: 1, emissive: 0x2a3020, emissiveMap: grassTex });
+  const mat = new THREE.MeshStandardMaterial({ map: grassTex, alphaTest: .45, side: THREE.DoubleSide, roughness: 1, emissive: 0x141c30, emissiveMap: grassTex });
   mat.onBeforeCompile = s => { s.fragmentShader = s.fragmentShader.replace('float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;', 'float faceDirection = 1.0;'); };
   const mesh = new THREE.InstancedMesh(tuftGeo, mat, GN), d = new THREE.Object3D(), col = new THREE.Color();
   let seed = 41 + zi * 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
@@ -75,7 +75,7 @@ export function makeGrass(zi, radius) {
     if (dz < 1.7 || rr < CLEAR + .6) continue;
     if (rnd() > sm(.36, .6, fbm(x * .22 + 5, z * .22 + 9, 3))) continue;
     d.position.set(x, 0, z); const s = .3 + rnd() * .45; d.scale.set(s, s * (.5 + rnd() * .5), s); d.rotation.set(0, rnd() * 6, 0); d.updateMatrix(); mesh.setMatrixAt(n, d.matrix);
-    col.copy(base).multiplyScalar(2.2 + rnd() * 1.3).offsetHSL((rnd() - .5) * .05, .05, 0); mesh.setColorAt(n, col); n++;
+    col.copy(base).multiplyScalar(1.3 + rnd() * 1.0).offsetHSL((rnd() - .5) * .05, .05, 0); mesh.setColorAt(n, col); n++;
   }
   mesh.count = n; return mesh;
 }
