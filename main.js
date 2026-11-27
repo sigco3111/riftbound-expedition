@@ -408,15 +408,15 @@ function heroSkill(h) {
   const live = G.enemies.filter(e => e.alive);
   const hurt = G.heroes.filter(x => x.alive && x.hp < x.maxhp * .75);
   switch (sk.type) {
-    case 'barrier': if (live.some(e => e.pos.distanceTo(h.pos) < 6)) { G.heroes.forEach(x => x.shield = 4); ring(h.pos, 5, 0xffd36b); used = true; } break;
-    case 'heal': if (hurt.length || G.lantern < G.lanternMax * .7) { G.heroes.forEach(x => x.alive && (x.hp = Math.min(x.maxhp, x.hp + sk.power * G.bonus.atk))); G.lantern = Math.min(G.lanternMax, G.lantern + sk.power * .4); ring(h.pos, 6, 0x58d68d); used = true; } break;
+    case 'barrier': if (live.some(e => e.pos.distanceTo(h.pos) < 6)) { G.heroes.forEach(x => x.shield = 4); ring(h.pos, 2.2, 0xffd36b); used = true; } break;
+    case 'heal': if (hurt.length || G.lantern < G.lanternMax * .7) { G.heroes.forEach(x => x.alive && (x.hp = Math.min(x.maxhp, x.hp + sk.power * G.bonus.atk))); G.lantern = Math.min(G.lanternMax, G.lantern + sk.power * .4); ring(h.pos, 2.4, 0x58d68d); used = true; } break;
     case 'aoe': { const t = nearest(live, h.pos, 18); if (t) { const r = sk.r * S.aoe; ring(t.pos, r, sk.color || 0xb86bff, .5); const dmg = sk.power * G.bonus.atk * S.dmg; after(.25, () => G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < r && (damageEnemy(e, dmg), sk.slow && (e.slow = 2.5)))); used = true; } } break;
     case 'pull': { const t = nearest(live, h.pos, 18); if (t) { ring(t.pos, sk.r * S.aoe, 0x9b6bdc, .6); G.enemies.forEach(e => { if (e.alive && !e.def.boss && e.pos.distanceTo(t.pos) < sk.r * S.aoe) { e.pos.lerp(t.pos, .8); e.slow = 3; } }); used = true; } } break;
     case 'turret': if (live.length) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, .9, 8), new THREE.MeshStandardMaterial({ color: sk.color || 0x4aa3df, emissive: sk.color || 0x4aa3df, emissiveIntensity: .4 })); const p = h.pos.clone().add(new THREE.Vector3((Math.random() - .5) * 3, 0, (Math.random() - .5) * 3)); m.position.set(p.x, .45, p.z); scene.add(m); G.turrets.push({ mesh: m, pos: p, life: 12, cd: 0, dmg: sk.power * G.bonus.atk * S.turret, blocker: sk.blocker }); used = true; } break;
     case 'trap': if (live.length) { const t = nearest(live, h.pos, 18); const m = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, .1, 12), new THREE.MeshBasicMaterial({ color: 0xe67e22 })); m.position.set(t.pos.x, .06, t.pos.z); scene.add(m); G.turrets.push({ mesh: m, pos: t.pos.clone(), life: 10, trap: true, dmg: sk.power * G.bonus.atk * S.turret, r: 3 }); used = true; } break;
     case 'volley': { const t = nearest(live, h.pos, 20); if (t) { const dmg = sk.power * G.bonus.atk * S.dmg * S.ranged; for (let i = 0; i < sk.n; i++) after(i * .08, () => { const tt = nearest(G.enemies.filter(e => e.alive), h.pos, 22); tt && shoot(h.pos, tt, dmg, h.def.color, e => damageEnemy(e, dmg)); }); used = true; } } break;
     case 'dash': { const t = nearest(live, h.pos, 20); if (t) { const dir = t.pos.clone().sub(h.pos).setY(0).normalize(); h.pos.copy(t.pos).addScaledVector(dir, -1.2); const dmg = sk.power * G.bonus.atk * S.dmg; G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < 2.8 && damageEnemy(e, dmg)); ring(t.pos, 2.8, 0xff5555, .3); used = true; } } break;
-    case 'aura': G.heroes.forEach(x => x.buffT = 5); ring(h.pos, 7, 0xffe08a, .8); used = !!live.length; if (used) G.bonus.atk *= 1; break;
+    case 'aura': G.heroes.forEach(x => x.buffT = 5); ring(h.pos, 2.6, 0xffe08a, .6); used = !!live.length; if (used) G.bonus.atk *= 1; break;
     case 'gold': G.earned += 0; used = false; h.skCd = 9999; break;
   }
   if (used) { h.skCd = sk.cd * S.cdr * G.bonus.cdr; if (h.clips.cast && sk.type !== 'dash') { h.busy = .5; play(h.inst, h.clips.cast, { loop: false, fade: .1 }); } }
