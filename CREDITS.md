@@ -15,3 +15,6 @@ Quaternius, "Ultimate Modular Men Pack" (11 models, mirrored per model on https:
 | Animated Zombie | Quaternius, https://poly.pizza/m/jkrEvQZb8J | CC BY 3.0, credit: Quaternius |
 
 Rat, Lava Golem and Skeleton Outlaw were converted to GLB (texture mapping fixed, Skeleton Outlaw from FBX 6.1 ASCII). Geometry and animation are unchanged.
+
+## Rendering add-ons
+Bloom/output post-processing uses the official three.js r160 examples (EffectComposer, RenderPass, UnrealBloomPass, OutputPass, ShaderPass, MaskPass, Pass, CopyShader, LuminosityHighPassShader, OutputShader) under lib/addons/, MIT, same license as three.js (lib/THREE_LICENSE.txt). The ground, road, puddle and grass scenery in scenery.js is original code. The look is a free reinterpretation (blue moonlit night, warm lantern, wet road, fog); no Lanternfall code or assets are used.

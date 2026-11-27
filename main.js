@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { MOBILE, SZ, makeGround, makeGrass, makeEnv } from './scenery.js';
 import { HEROES, ERA, ENEMIES, UPGRADES, CREDITS, ZONES } from './data.js';
 
 const $ = id => document.getElementById(id);
@@ -14,11 +19,15 @@ const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save
 // ---------- renderer ----------
 const canvas = $('c');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(devicePixelRatio, MOBILE ? 1.5 : 2));
+const LOWQ = Q.get('q') === 'low';
+renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = !LOWQ; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+var composer = null;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a1020);
-scene.fog = new THREE.Fog(0x0a1020, 30, 80);
+scene.fog = new THREE.FogExp2(0x1a2c4e, 0.02);
 const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
 const camOff = new THREE.Vector3(), camTarget = new THREE.Vector3();
 function resize() {
@@ -28,10 +37,11 @@ function resize() {
   camOff.set(0, portrait ? 19 : 13, portrait ? 12.5 : 10.5);
   camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1);
   camera.updateProjectionMatrix();
+  if (composer) composer.setSize(innerWidth, innerHeight);
 }
 addEventListener('resize', resize); resize();
-const hemi = new THREE.HemisphereLight(0xb4c6ff, 0x3a3048, 1.6); scene.add(hemi);
-const moon = new THREE.DirectionalLight(0xc7d6ff, 1.4); moon.position.set(-10, 20, 8); scene.add(moon);
+const hemi = new THREE.HemisphereLight(0x8aa4e8, 0x2a2840, 1.25); scene.add(hemi);
+const moon = new THREE.DirectionalLight(0xa8c0ff, 1.9); moon.position.set(-10, 20, 8); scene.add(moon);
 const ARENA = 19;
 function skyTexture(top, bot) {
   const c = document.createElement('canvas'); c.width = 16; c.height = 512; const g = c.getContext('2d');
@@ -50,11 +60,12 @@ function groundTexture() {
   for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; g.beginPath(); g.moveTo(S / 2 + Math.cos(a) * S * .17, S / 2 + Math.sin(a) * S * .17); g.lineTo(S / 2 + Math.cos(a) * S * .26, S / 2 + Math.sin(a) * S * .26); g.stroke(); }
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
 }
-const groundMat = new THREE.MeshStandardMaterial({ map: groundTexture(), roughness: 1 });
+const groundMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, envMapIntensity: 1.0 });
 {
   const g = new THREE.Mesh(new THREE.CircleGeometry(ARENA + 18, 64), groundMat);
-  g.rotation.x = -Math.PI / 2; scene.add(g);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(ARENA - 0.25, ARENA + 0.25, 80), new THREE.MeshBasicMaterial({ color: 0xffa24a }));
+  g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
+  g.geometry.attributes.uv.array.forEach((v, i, a) => { a[i] = (v - .5) * (2 * (ARENA + 18) / SZ) + .5; });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(ARENA - 0.25, ARENA + 0.25, 80), new THREE.MeshBasicMaterial({ color: 0xffa24a, transparent: true, opacity: .28, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; scene.add(ring);
   // stars + moon
   const sp = []; for (let i = 0; i < 400; i++) { const a = Math.random() * 6.283, e = Math.random() * 1.2 + .1, R = 150; sp.push(Math.cos(a) * Math.cos(e) * R, Math.sin(e) * R * .7 + 10, Math.sin(a) * Math.cos(e) * R - 20); }
@@ -69,6 +80,8 @@ function makeWall(M) { const g = new THREE.Group(); g.add(box(5, 3, 1, M.stone, 
 function makeCar(M) { const g = new THREE.Group(); g.add(box(3.4, .9, 1.6, M.car, 0, .8, 0)); g.add(box(1.8, .8, 1.4, M.glass, -.2, 1.6, 0)); for (const [x, z] of [[-1.1, .8], [1.1, .8], [-1.1, -.8], [1.1, -.8]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(.4, .4, .3, 10), M.dark); w.rotation.x = Math.PI / 2; w.position.set(x, .4, z); g.add(w); } return g; }
 function makePod(M) { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.9, 3.6, 8), M.hull); b.position.y = 1.4; g.add(b); const band = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, .3, 8), M.glow); band.position.y = 2.2; g.add(band); const fin = box(.3, 2.2, 2.4, M.hull, 1.7, 1, 0); g.add(fin); return g; }
 function makeCrystal(M) { const g = new THREE.Group(); for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(.5 + Math.random() * .5, 2.5 + Math.random() * 3.5, 5), M.crystal); c.position.set((Math.random() - .5) * 2.4, 1.4, (Math.random() - .5) * 2.4); c.rotation.z = (Math.random() - .5) * .5; g.add(c); } return g; }
+let grassMesh = null; const groundCache = {};
+function getGround(zi) { const k = zi % ZONES.length; return groundCache[k] || (groundCache[k] = Object.assign(makeGround(k), { env: makeEnv(renderer, ZONES[k]) })); }
 function buildWorld(zi) {
   const Z = ZONES[zi % ZONES.length];
   world.clear();
@@ -82,9 +95,13 @@ function buildWorld(zi) {
   }
   for (let i = 0; i < 14; i++) { const o = new THREE.Mesh(new THREE.DodecahedronGeometry(.3 + rnd() * .5), M.stone); const a = rnd() * 6.28, r = 7 + rnd() * 11; o.position.set(Math.cos(a) * r, .2, Math.sin(a) * r); world.add(o); }
   // rift cracks on the ground
-  const cm = new THREE.MeshBasicMaterial({ color: Z.glow });
+  const cm = new THREE.MeshBasicMaterial({ color: new THREE.Color(Z.glow).multiplyScalar(1.5) });
   for (let i = 0; i < 6; i++) { const a = rnd() * 6.28; const cr = box(.25, .04, 3 + rnd() * 4, cm, Math.cos(a) * (ARENA - 3), .05, Math.sin(a) * (ARENA - 3)); cr.rotation.y = a + 1.57 + (rnd() - .5); world.add(cr); }
-  scene.background = skyTexture(Z.skyTop, Z.skyBot); scene.fog.color.set(Z.fog); groundMat.color.set(Z.ground); hemi.color.set(Z.hemi); moon.color.set(Z.moon);
+  scene.background = skyTexture(Z.skyTop, Z.skyBot); scene.fog.color.set(Z.skyBot).lerp(new THREE.Color(Z.fog), .35); hemi.color.set(Z.hemi); moon.color.set(Z.moon);
+  world.traverse(o => { if (o.isMesh) o.castShadow = true; });
+  const gt = getGround(zi); groundMat.map = gt.map; groundMat.roughnessMap = gt.rough; groundMat.envMap = gt.env; groundMat.needsUpdate = true;
+  if (grassMesh) { scene.remove(grassMesh); grassMesh.material.dispose(); grassMesh.dispose(); }
+  grassMesh = makeGrass(zi, ARENA + 14); scene.add(grassMesh);
 }
 // floating embers around the lantern
 const emberGeo = new THREE.BufferGeometry(); const EN = 140; const emberPos = new Float32Array(EN * 3); const emberSeed = [];
@@ -97,9 +114,9 @@ const lantern = new THREE.Group();
 {
   const pole = new THREE.Mesh(new THREE.CylinderGeometry(.12, .18, 3.2, 8), new THREE.MeshStandardMaterial({ color: 0x2b2b30 }));
   pole.position.y = 1.6; lantern.add(pole);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.55, 16, 12), new THREE.MeshBasicMaterial({ color: 0xffc766 }));
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.4, 16, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc766).multiplyScalar(1.7) }));
   bulb.position.y = 3.5; lantern.add(bulb);
-  const light = new THREE.PointLight(0xffa03a, 90, 30, 1.6); light.position.y = 3.6; lantern.add(light);
+  const light = new THREE.PointLight(0xffb066, 110, 22, 2); light.position.y = 3.6; light.castShadow = !LOWQ; light.shadow.mapSize.set(MOBILE ? 512 : 1024, MOBILE ? 512 : 1024); light.shadow.bias = -.002; light.shadow.camera.near = .5; light.shadow.camera.far = 30; lantern.add(light);
   lantern.userData = { bulb, light };
   scene.add(lantern);
 }
@@ -122,7 +139,7 @@ function makeInstance(gltf, targetH, mode, yaw) {
   root.updateMatrixWorld(true);
   box = new THREE.Box3().setFromObject(root);
   root.position.y -= box.min.y; root.position.x -= (box.min.x + box.max.x) / 2; root.position.z -= (box.min.z + box.max.z) / 2;
-  root.traverse(o => { if (o.isMesh) { o.frustumCulled = false; } });
+  root.traverse(o => { if (o.isMesh) { o.frustumCulled = false; o.castShadow = true; o.receiveShadow = true; } });
   const mixer = new THREE.AnimationMixer(root);
   return { wrap, root, mixer, clips: gltf.animations, actions: {}, cur: null };
 }
@@ -467,7 +484,7 @@ function update(dt) {
   if (G.waveActive && !G.spawnQ.length && G.enemies.every(e => !e.alive) && !G.over) { G.boss = null; offerUpgrade(); }
   if (!G.over && living.length === 0 && G.heroes.length) end();
   // lantern glow
-  const pulse = .85 + Math.sin(G.t * 3) * .1; lantern.userData.light.intensity = 90 * pulse * (.5 + .5 * Math.max(0, G.lantern) / G.lanternMax);
+  const pulse = .85 + Math.sin(G.t * 3) * .1; lantern.userData.light.intensity = 110 * pulse * (.5 + .5 * Math.max(0, G.lantern) / G.lanternMax);
   { const c = new THREE.Vector3(); let n = 0; living.forEach(h => { c.add(h.pos); n++; }); if (n) { c.multiplyScalar(.75 / n); camTarget.lerp(c, Math.min(1, dt * 3)); camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1); } }
   tickEmbers(G.t, dt);
   updateHUD();
@@ -476,9 +493,10 @@ function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), .05);
   if (G && !G.over && !G.paused && $('loading').classList.contains('hidden')) { const n = TS; for (let i = 0; i < n && G && !G.over && !G.paused; i++) update(dt); }
-  renderer.render(scene, camera);
+  if (composer) composer.render(); else renderer.render(scene, camera);
 }
 buildWorld(0);
+if (!LOWQ) { composer = new EffectComposer(renderer); composer.setSize(innerWidth, innerHeight); composer.addPass(new RenderPass(scene, camera)); composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / (MOBILE ? 2 : 1), innerHeight / (MOBILE ? 2 : 1)), .5, .6, .9)); composer.addPass(new OutputPass()); }
 frame();
 renderMenu();
 window.__dbg = () => G; // dev
