@@ -5,7 +5,7 @@ import * as THREE from 'three';
 export const MOBILE = matchMedia('(pointer: coarse)').matches || Math.min(innerWidth, innerHeight) < 560;
 export const SZ = 76; // ground texture covers SZ x SZ world units
 const PAL = [ // per zone: grass rgb, mud rgb, puddle rgb
-  { gr: [40, 46, 36], mud: [58, 54, 52], pud: [26, 40, 66] },
+  { gr: [34, 44, 46], mud: [56, 56, 60], pud: [26, 40, 66] },
   { gr: [34, 46, 52], mud: [78, 78, 84], pud: [22, 40, 70] },
   { gr: [44, 40, 60], mud: [80, 68, 92], pud: [34, 30, 74] },
   { gr: [56, 36, 52], mud: [96, 60, 84], pud: [60, 24, 66] },

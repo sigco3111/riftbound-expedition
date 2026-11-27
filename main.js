@@ -28,13 +28,13 @@ renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a1020);
 scene.fog = new THREE.FogExp2(0x1a2c4e, 0.024);
-const camera = new THREE.PerspectiveCamera(44, 1, 0.1, 260);
+const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 400);
 const camOff = new THREE.Vector3(), camTarget = new THREE.Vector3();
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   const portrait = camera.aspect < 0.8;
-  camOff.set(0, portrait ? 19 : 11, portrait ? 12.5 : 13.5);
+  camOff.set(0, portrait ? 19 : 8, portrait ? 12.5 : 15);
   camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1);
   camera.updateProjectionMatrix();
   if (composer) composer.setSize(innerWidth, innerHeight);
@@ -42,6 +42,7 @@ function resize() {
 addEventListener('resize', resize); resize();
 const hemi = new THREE.HemisphereLight(0x5a7ee8, 0x1c2040, 1.45); scene.add(hemi);
 const moon = new THREE.DirectionalLight(0x86a4ff, 2.6); moon.position.set(-10, 20, 8); scene.add(moon);
+const rim = new THREE.DirectionalLight(0x6c8cff, 1.3); rim.position.set(12, 9, -16); scene.add(rim);
 const ARENA = 19;
 function skyTexture(top, bot) {
   const c = document.createElement('canvas'); c.width = 16; c.height = 512; const g = c.getContext('2d');
@@ -64,6 +65,7 @@ const groundMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, e
 {
   const g = new THREE.Mesh(new THREE.CircleGeometry(ARENA + 18, 64), groundMat);
   g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
+  { const far = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshBasicMaterial({ color: 0x1a2438 })); far.rotation.x = -Math.PI / 2; far.position.y = -.04; scene.add(far); }
   g.geometry.attributes.uv.array.forEach((v, i, a) => { a[i] = (v - .5) * (2 * (ARENA + 18) / SZ) + .5; });
   const ring = new THREE.Mesh(new THREE.RingGeometry(ARENA - 0.25, ARENA + 0.25, 80), new THREE.MeshBasicMaterial({ color: 0xffa24a, transparent: true, opacity: .28, depthWrite: false }));
   ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; scene.add(ring);

@@ -62,7 +62,7 @@ export const CREDITS = `
 
 // 5 zones, 5 waves each. mix: 0 wall (medieval), 1 car (modern), 2 pod (space), 3 rift crystal
 export const ZONES = [
-  { name: '폐성 외곽', sub: '중세의 잔해', mix: [0, 0, 0, 1], stone: 0x7a6a58, car: 0x6a3a30, hull: 0x6a7a90, glow: 0xff9b3d, ground: 0xb0a090, fog: 0x1a1a26, skyTop: '#0a0f24', skyBot: '#33283a', hemi: 0xc6c0ff, moon: 0xffe0b8 },
+  { name: '폐성 외곽', sub: '중세의 잔해', mix: [0, 0, 0, 1], stone: 0x7a6a58, car: 0x6a3a30, hull: 0x6a7a90, glow: 0xff9b3d, ground: 0xb0a090, fog: 0x14203a, skyTop: '#060b1e', skyBot: '#1f3258', hemi: 0xc6c0ff, moon: 0xffe0b8 },
   { name: '무너진 도심', sub: '현대의 폐허', mix: [1, 1, 1, 0], stone: 0x5a6070, car: 0x3a5a8a, hull: 0x7080a0, glow: 0x4aa3df, ground: 0x9aa4c0, fog: 0x10182a, skyTop: '#070d1f', skyBot: '#1f3050', hemi: 0xa8c4ff, moon: 0xc8dcff },
   { name: '추락한 정거장', sub: '우주의 파편', mix: [2, 2, 2, 1], stone: 0x56506a, car: 0x4a4a6a, hull: 0x8a90b0, glow: 0xa77be8, ground: 0x9a90c0, fog: 0x140f26, skyTop: '#0a0620', skyBot: '#3a1f5a', hemi: 0xc0a8ff, moon: 0xe0c8ff },
   { name: '뒤섞인 균열', sub: '세 시대가 겹친 곳', mix: [0, 1, 2, 3, 3], stone: 0x5a4a60, car: 0x5a3a5a, hull: 0x7a6a90, glow: 0xff5ea8, ground: 0xa088a8, fog: 0x1e0c22, skyTop: '#14061c', skyBot: '#582040', hemi: 0xffa8d8, moon: 0xffc8e0 },
