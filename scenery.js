@@ -12,11 +12,13 @@ const PAL = [ // per zone: grass rgb, mud rgb, puddle rgb
   { gr: [70, 60, 30], mud: [92, 78, 54], pud: [58, 48, 28] },
 ];
 const hash = (x, y) => { const h = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return h - Math.floor(h); };
-const vn = (x, y) => { const xi = Math.floor(x), yi = Math.floor(y), xf = x - xi, yf = y - yi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf); return hash(xi, yi) * (1 - u) * (1 - v) + hash(xi + 1, yi) * u * (1 - v) + hash(xi, yi + 1) * (1 - u) * v + hash(xi + 1, yi + 1) * u * v; };
-export const fbm = (x, y, o = 4) => { let s = 0, a = .5; for (let i = 0; i < o; i++) { s += a * vn(x, y); x *= 2.03; y *= 2.03; a *= .5; } return s; };
+const md = (a, n) => ((a % n) + n) % n;
+// value noise that repeats every SZ world units on both axes: lattice has `cy` cells per period
+const vnp = (u, v, cy) => { const xi = Math.floor(u), yi = Math.floor(v), xf = u - xi, yf = v - yi, a = xf * xf * (3 - 2 * xf), b = yf * yf * (3 - 2 * yf); const x0 = md(xi, cy), x1 = md(xi + 1, cy), y0 = md(yi, cy), y1 = md(yi + 1, cy); return hash(x0, y0) * (1 - a) * (1 - b) + hash(x1, y0) * a * (1 - b) + hash(x0, y1) * (1 - a) * b + hash(x1, y1) * a * b; };
+// fp(x, z, f, o): fractal noise at about f cycles per world unit, tileable with period SZ
+export const fp = (x, z, f, o = 3) => { let c = Math.max(1, Math.round(f * SZ)), s = 0, a = .5; for (let i = 0; i < o; i++) { s += a * vnp(x / SZ * c + 3.7 * i, z / SZ * c + 1.9 * i, c); c *= 2; a *= .5; } return s; };
 const sm = (a, b, x) => { x = Math.min(1, Math.max(0, (x - a) / (b - a))); return x * x * (3 - 2 * x); };
-export const roadZ = x => .2 + Math.sin(x * .16 + .5) * 2.6 - x * .06; // road centre line z(x), passes the lantern clearing
-const CLEAR = 4.4;
+export const roadZ = x => Math.sin(x * (Math.PI * 4 / SZ) + .5) * 2.4; // road centre line z(x), repeats every SZ so the road can scroll forever
 
 export function makeGround(zi) {
   const P = PAL[zi % PAL.length], N = MOBILE ? 512 : 1024;
@@ -24,17 +26,17 @@ export function makeGround(zi) {
   const rc = document.createElement('canvas'); rc.width = rc.height = N; const gr = rc.getContext('2d'), imr = gr.createImageData(N, N);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const x = (i / N - .5) * SZ, z = (j / N - .5) * SZ, k = (j * N + i) * 4;
-    const n1 = fbm(x * .35, z * .35, 3), n2 = fbm(x * 1.6 + 9, z * 1.6 + 4, 3), n3 = fbm(x * .9 + 30, z * .9 + 7, 3);
-    const dz = z - roadZ(x) + (n1 - .5) * 1.6, rr = Math.hypot(x, z) + (n1 - .5) * 2.4;
-    const road = Math.max(1 - sm(1.35, 2.1, Math.abs(dz)), 1 - sm(CLEAR - .8, CLEAR + .9, rr)); // road + lantern clearing
+    const n1 = fp(x, z, .35, 3), n2 = fp(x + 9, z + 4, 1.6, 3), n3 = fp(x + 30, z + 7, .9, 3);
+    const dz = z - roadZ(x) + (n1 - .5) * 1.6;
+    const road = 1 - sm(1.35, 2.1, Math.abs(dz));
     const tn = .55 + n2 * .9 + n3 * .35;
     let cr = P.gr[0] * tn, cg = P.gr[1] * tn, cb = P.gr[2] * tn;
     const mr = P.mud[0] * (.7 + n2 * .6), mg = P.mud[1] * (.7 + n2 * .6), mb = P.mud[2] * (.7 + n2 * .6);
     cr += (mr - cr) * road; cg += (mg - cg) * road; cb += (mb - cb) * road;
     let rough = .95 - .15 * road;
     const lane = Math.min(Math.abs(dz - .62), Math.abs(dz + .62)), rut = (1 - sm(.12, .34, lane)) * (1 - sm(1.4, 2.0, Math.abs(dz)));
-    const wet = sm(.5, .6, fbm(x * .55 + 50, z * 2.2 + 3, 3)) * rut;
-    const pud = sm(.6, .68, fbm(x * .3 + 120, z * .3 + 55, 3)) * road * (1 - sm(CLEAR - 3, CLEAR - 1, rr) * .0);
+    const wet = sm(.5, .6, fp(x + 50, z + 3, 1.1, 3)) * rut;
+    const pud = sm(.6, .68, fp(x + 120, z + 55, .3, 3)) * road;
     const w = Math.max(wet, pud * .9);
     cr = cr * (1 - .4 * rut) * (1 - w) + P.pud[0] * w; cg = cg * (1 - .4 * rut) * (1 - w) + P.pud[1] * w; cb = cb * (1 - .4 * rut) * (1 - w) + P.pud[2] * w;
     rough = rough * (1 - .4 * rut) * (1 - w) + .04 * w;
@@ -60,24 +62,28 @@ function grassAssets() {
   for (let i = 0; i < pos.length / 3; i++) nn.push(0, 1, 0);
   tuftGeo = new THREE.BufferGeometry(); tuftGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); tuftGeo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); tuftGeo.setAttribute('normal', new THREE.Float32BufferAttribute(nn, 3));
 }
-export function makeGrass(zi, radius) {
+export function makeGrass(zi) { // grass for one SZ-long stretch of road, copied 3 times; main.js slides it so the road never ends
   grassAssets();
-  const P = PAL[zi % PAL.length], GN = MOBILE ? 3500 : 9000;
+  const P = PAL[zi % PAL.length], PER = MOBILE ? 2400 : 5200, BAND = 30; // tufts per stretch, half width of the grass band
   const mat = new THREE.MeshStandardMaterial({ map: grassTex, alphaTest: .45, side: THREE.DoubleSide, roughness: 1, emissive: 0x141c30, emissiveMap: grassTex });
   mat.onBeforeCompile = s => { s.fragmentShader = s.fragmentShader.replace('float faceDirection = gl_FrontFacing ? 1.0 : - 1.0;', 'float faceDirection = 1.0;'); };
-  const mesh = new THREE.InstancedMesh(tuftGeo, mat, GN), d = new THREE.Object3D(), col = new THREE.Color();
+  const mesh = new THREE.InstancedMesh(tuftGeo, mat, PER * 3), d = new THREE.Object3D(), col = new THREE.Color();
   let seed = 41 + zi * 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const base = new THREE.Color(P.gr[0] / 255, P.gr[1] / 255, P.gr[2] / 255);
-  let n = 0, tries = 0;
-  while (n < GN && tries++ < 300000) {
-    const a = rnd() * 6.283, r = Math.sqrt(rnd()) * radius, x = Math.cos(a) * r, z = Math.sin(a) * r;
-    const dz = Math.abs(z - roadZ(x)) + (fbm(x * .35, z * .35, 3) - .5) * 1.6, rr = Math.hypot(x, z) + (fbm(x * .35, z * .35, 3) - .5) * 2.4;
-    if (dz < 1.7 || rr < CLEAR + .6) continue;
-    if (rnd() > sm(.36, .6, fbm(x * .22 + 5, z * .22 + 9, 3))) continue;
-    d.position.set(x, 0, z); const s = .3 + rnd() * .45; d.scale.set(s, s * (.5 + rnd() * .5), s); d.rotation.set(0, rnd() * 6, 0); d.updateMatrix(); mesh.setMatrixAt(n, d.matrix);
-    col.copy(base).multiplyScalar(1.3 + rnd() * 1.0).offsetHSL((rnd() - .5) * .05, .05, 0); mesh.setColorAt(n, col); n++;
+  const local = []; let tries = 0;
+  while (local.length < PER && tries++ < 300000) {
+    const x = (rnd() - .5) * SZ, z = (rnd() * 2 - 1) * BAND;
+    const dz = Math.abs(z - roadZ(x)) + (fp(x, z, .35, 3) - .5) * 1.6;
+    if (dz < 1.7) continue;
+    if (rnd() > sm(.36, .6, fp(x + 5, z + 9, .22, 3))) continue;
+    local.push([x, z, .3 + rnd() * .45, .5 + rnd() * .5, rnd() * 6, 1.3 + rnd() * 1.0, (rnd() - .5) * .05]);
   }
-  mesh.count = n; return mesh;
+  let n = 0;
+  for (let c = -1; c <= 1; c++) for (const t of local) {
+    d.position.set(t[0] + c * SZ, 0, t[1]); d.scale.set(t[2], t[2] * t[3], t[2]); d.rotation.set(0, t[4], 0); d.updateMatrix(); mesh.setMatrixAt(n, d.matrix);
+    col.copy(base).multiplyScalar(t[5]).offsetHSL(t[6], .05, 0); mesh.setColorAt(n, col); n++;
+  }
+  mesh.count = n; mesh.frustumCulled = false; return mesh;
 }
 
 export function makeEnv(renderer, Z) { // small reflection source for wet ground: moon + lantern glow

@@ -5,7 +5,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { MOBILE, SZ, makeGround, makeGrass, makeEnv } from './scenery.js';
+import { MOBILE, SZ, roadZ, makeGround, makeGrass, makeEnv } from './scenery.js';
 import { HEROES, ERA, ENEMIES, UPGRADES, CREDITS, ZONES } from './data.js';
 
 const $ = id => document.getElementById(id);
@@ -63,12 +63,9 @@ function groundTexture() {
 }
 const groundMat = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0, envMapIntensity: 1.5 });
 {
-  const g = new THREE.Mesh(new THREE.CircleGeometry(ARENA + 18, 64), groundMat);
+  const g = new THREE.Mesh(new THREE.PlaneGeometry(SZ * 2, SZ * 2), groundMat);
   g.rotation.x = -Math.PI / 2; g.receiveShadow = true; scene.add(g);
   { const far = new THREE.Mesh(new THREE.PlaneGeometry(900, 900), new THREE.MeshBasicMaterial({ color: 0x1a2438 })); far.rotation.x = -Math.PI / 2; far.position.y = -.04; scene.add(far); }
-  g.geometry.attributes.uv.array.forEach((v, i, a) => { a[i] = (v - .5) * (2 * (ARENA + 18) / SZ) + .5; });
-  const ring = new THREE.Mesh(new THREE.RingGeometry(ARENA - 0.25, ARENA + 0.25, 80), new THREE.MeshBasicMaterial({ color: 0xffa24a, transparent: true, opacity: .28, depthWrite: false }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; scene.add(ring);
   // stars + moon
   const sp = []; for (let i = 0; i < 400; i++) { const a = Math.random() * 6.283, e = Math.random() * 1.2 + .1, R = 150; sp.push(Math.cos(a) * Math.cos(e) * R, Math.sin(e) * R * .7 + 10, Math.sin(a) * Math.cos(e) * R - 20); }
   const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
@@ -90,20 +87,21 @@ function buildWorld(zi) {
   const M = { stone: new THREE.MeshStandardMaterial({ color: Z.stone, roughness: 1 }), car: new THREE.MeshStandardMaterial({ color: Z.car, roughness: .7 }), glass: new THREE.MeshStandardMaterial({ color: 0x223044, roughness: .3 }), dark: new THREE.MeshStandardMaterial({ color: 0x15171d }), hull: new THREE.MeshStandardMaterial({ color: Z.hull, roughness: .5, metalness: .4 }), glow: new THREE.MeshBasicMaterial({ color: Z.glow }), crystal: new THREE.MeshStandardMaterial({ color: Z.glow, emissive: Z.glow, emissiveIntensity: .8, roughness: .3 }) };
   let seed = 11 + zi * 17; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
   const mk = [makeWall, makeCar, makePod, makeCrystal];
-  for (let i = 0; i < 40; i++) {
-    const kind = Z.mix[Math.floor(rnd() * Z.mix.length)];
-    const o = mk[kind](M); const a = rnd() * Math.PI * 2, r = ARENA + 2.5 + rnd() * 11;
-    o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); o.rotation.y = rnd() * 6.28; o.rotation.z = (rnd() - .5) * .35; o.scale.setScalar(.9 + rnd() * .8); world.add(o);
+  // debris of the swallowed eras along the road: one SZ-long stretch, repeated 3 times (main.js slides it with the road)
+  const spec = [];
+  for (let i = 0; i < 16; i++) { const x = (rnd() - .5) * SZ; spec.push({ kind: Z.mix[Math.floor(rnd() * Z.mix.length)], x, z: roadZ(x) - (9 + rnd() * 22), ry: rnd() * 6.28, rz: (rnd() - .5) * .35, s: .9 + rnd() * .8 }); }
+  for (let i = 0; i < 12; i++) { const x = (rnd() - .5) * SZ, side = rnd() < .5 ? -1 : 1; spec.push({ rock: .3 + rnd() * .5, x, z: roadZ(x) + side * (3.5 + rnd() * 18) }); }
+  for (let c = -1; c <= 1; c++) for (const p of spec) {
+    let o; if (p.rock) { o = new THREE.Mesh(new THREE.DodecahedronGeometry(p.rock), M.stone); o.position.set(p.x + c * SZ, .2, p.z); }
+    else { o = mk[p.kind](M); o.position.set(p.x + c * SZ, 0, p.z); o.rotation.y = p.ry; o.rotation.z = p.rz; o.scale.setScalar(p.s); }
+    world.add(o);
   }
-  for (let i = 0; i < 14; i++) { const o = new THREE.Mesh(new THREE.DodecahedronGeometry(.3 + rnd() * .5), M.stone); const a = rnd() * 6.28, r = 7 + rnd() * 11; o.position.set(Math.cos(a) * r, .2, Math.sin(a) * r); world.add(o); }
-  // rift cracks on the ground
-  const cm = new THREE.MeshBasicMaterial({ color: new THREE.Color(Z.glow).multiplyScalar(1.5) });
-  for (let i = 0; i < 6; i++) { const a = rnd() * 6.28; const cr = box(.25, .04, 3 + rnd() * 4, cm, Math.cos(a) * (ARENA - 3), .05, Math.sin(a) * (ARENA - 3)); cr.rotation.y = a + 1.57 + (rnd() - .5); world.add(cr); }
   scene.background = skyTexture(Z.skyTop, Z.skyBot); scene.fog.color.set(Z.skyBot).lerp(new THREE.Color(Z.fog), .35); hemi.color.set(Z.hemi); moon.color.set(Z.moon);
   world.traverse(o => { if (o.isMesh) o.castShadow = true; });
-  const gt = getGround(zi); groundMat.map = gt.map; groundMat.roughnessMap = gt.rough; groundMat.envMap = gt.env; groundMat.needsUpdate = true;
+  const gt = getGround(zi); for (const x of [gt.map, gt.rough]) { x.wrapS = x.wrapT = THREE.RepeatWrapping; x.repeat.set(2, 2); }
+  groundMat.map = gt.map; groundMat.roughnessMap = gt.rough; groundMat.envMap = gt.env; groundMat.needsUpdate = true;
   if (grassMesh) { scene.remove(grassMesh); grassMesh.material.dispose(); grassMesh.dispose(); }
-  grassMesh = makeGrass(zi, ARENA + 14); scene.add(grassMesh);
+  grassMesh = makeGrass(zi); scene.add(grassMesh);
 }
 // floating embers around the lantern
 const emberGeo = new THREE.BufferGeometry(); const EN = 140; const emberPos = new Float32Array(EN * 3); const emberSeed = [];
@@ -159,7 +157,7 @@ let G = null; // game state
 const heroById = Object.fromEntries(HEROES.map(h => [h.id, h]));
 let selected = (save.party || []).filter(id => heroById[id] && save.unlocked.includes(id)).slice(0, 5);
 if (Q.get('party')) selected = Q.get('party').split(',').filter(id => heroById[id]).slice(0, 5);
-let manual = true;
+let manual = false;
 const keys = {}; let stickVec = { x: 0, y: 0 };
 
 // ---------- synergy ----------
@@ -237,7 +235,7 @@ async function startGame() {
   $('loading').classList.remove('hidden');
   if (G) cleanup();
   const S = computeSynergy(selected);
-  G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], t: 0, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null };
+  G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null };
   for (let i = 0; i < selected.length; i++) {
     const def = heroById[selected[i]]; const gltf = await loadModel(def.file);
     const inst = makeInstance(gltf, 1.75, 'y', 0);
@@ -251,9 +249,9 @@ async function startGame() {
   $('menu').classList.add('hidden'); $('modal').classList.add('hidden'); $('hud').classList.remove('hidden'); $('loading').classList.add('hidden');
   $('stick').classList.toggle('hidden', !('ontouchstart' in window));
   updateHUD();
-  const startWave = parseInt(Q.get('wave') || '0', 10);
-  G.wave = Math.max(0, startWave - 1);
-  nextWave();
+  const startWave = parseInt(Q.get('wave') || '1', 10);
+  G.wave = Math.max(1, startWave);
+  beginStage();
 }
 function cleanup() {
   [...G.heroes.map(h => h.inst.wrap), ...G.enemies.map(e => e.inst.wrap), ...G.proj.map(p => p.mesh), ...G.fx.map(f => f.mesh), ...G.turrets.map(t => t.mesh)].forEach(o => scene.remove(o));
@@ -271,8 +269,8 @@ function buildPartyUI() {
 function toast(t) { const e = $('toast'); e.textContent = t; e.style.opacity = 1; clearTimeout(toast.h); toast.h = setTimeout(() => e.style.opacity = 0, 1600); }
 function updateHUD() {
   $('wave').textContent = G.wave; $('kills').textContent = G.kills; $('embers').textContent = G.earned;
-  $('lanternFill').style.width = Math.max(0, G.lantern / G.lanternMax * 100) + '%';
-  $('lanternTxt').textContent = `등불 ${Math.max(0, Math.ceil(G.lantern))}/${G.lanternMax}`;
+  $('lanternFill').style.width = Math.min(100, G.packsDone / 4 * 100) + '%';
+  $('lanternTxt').textContent = `${ZONES[Math.max(0, Math.floor((G.wave - 1) / 5)) % 5].name} · 불꽃 ×${G.flames} · ${Math.min(G.packNo, 3)}/3 무리${G.packsDone >= 4 ? ' · 보스 격파' : ''}`;
   G.heroes.forEach(h => { h.ui.classList.toggle('dead', !h.alive); h.ui.querySelector('.hp').style.width = Math.max(0, h.hp / h.maxhp * 100) + '%'; const cdv = 1 - Math.max(0, h.skCd) / (h.def.skill.cd * G.S.cdr * G.bonus.cdr); h.ui.querySelector('.cd').style.width = Math.min(100, cdv * 100) + '%'; });
   $('modeBtn').textContent = manual ? '수동 (Space)' : '위임 (Space)';
   if (G.boss && G.boss.alive) { $('bossBar').classList.remove('hidden'); $('bossName').textContent = G.boss.def.name; $('bossFill').style.width = Math.max(0, G.boss.hp / G.boss.maxhp * 100) + '%'; } else $('bossBar').classList.add('hidden');
@@ -291,7 +289,7 @@ addEventListener('keyup', e => keys[e.code] = false);
 // ----- waves -----
 function waveComposition(w) {
   const q = []; const z = Math.floor((w - 1) / 5);
-  const n = 5 + Math.floor(w * 1.8);
+  const n = 9 + Math.floor(w * 2.2);
   for (let i = 0; i < n; i++) {
     const r = Math.random(); let k = 'rat';
     if (z === 0) k = r > .55 ? 'zombie' : 'rat';
@@ -301,28 +299,68 @@ function waveComposition(w) {
     q.push(k);
   }
   if (w >= 3 && w % 3 === 0 && w % 5 !== 0) q.push('lava');
-  if (w % 5 === 0) {
-    const zi = w / 5 - 1; const set = [['ogre'], ['trex'], ['mech'], ['ogre', 'trex'], ['mech', 'trex', 'ogre']][zi % 5];
-    q.push(...set); if (zi >= 5) q.push(...set);
-  }
   return q;
 }
-async function nextWave() {
-  G.wave++; G.waveActive = true;
-  const zi = Math.floor((G.wave - 1) / 5); if (G.zone !== zi) { G.zone = zi; buildWorld(zi); if ((G.wave - 1) % 5 === 0) setTimeout(() => toast(`구역 ${zi % 5 + 1}: ${ZONES[zi % 5].name}`), 1700); }
-  G.spawnQ = Q.get('force') ? Q.get('force').split(',') : waveComposition(G.wave);
-  const need = [...new Set(G.spawnQ)];
-  await Promise.all(need.map(preloadEnemy));
-  G.spawnT = 0; G.spawnTotal = G.spawnQ.length;
-  toast(G.wave % 5 === 0 ? `웨이브 ${G.wave}: 균열의 군주!` : `웨이브 ${G.wave}`);
+const BOSS_ORDER = ['ogre', 'trex', 'mech'];
+const bossOf = w => BOSS_ORDER[(w - 1) % 3];
+const WALK = 3.4;
+const CEN = new THREE.Vector3(), EAST = new THREE.Vector3(1, 0, 0);
+// ----- stage flow: march along the road -> 3 packs -> stage boss -> relight -> pick a boon -> next stage -----
+async function beginStage() {
+  const zi = Math.floor((G.wave - 1) / 5);
+  if (G.zone !== zi) { G.zone = zi; buildWorld(zi); if ((G.wave - 1) % 5 === 0) setTimeout(() => toast(`구역 ${zi % 5 + 1}: ${ZONES[zi % 5].name}`), 1700); }
+  const all = waveComposition(G.wave), per = Math.ceil(all.length / 3);
+  G.packs = [all.slice(0, per), all.slice(per, per * 2), all.slice(per * 2)];
+  G.packNo = 0; G.packsDone = 0; G.spawnQ = []; G.waveActive = false; G.boss = null;
+  await Promise.all([...new Set([...all, bossOf(G.wave)])].map(preloadEnemy));
   G.heroes.forEach(h => { if (!h.alive) { h.alive = true; h.hp = h.maxhp * .6; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); } });
+  G.state = 'walk'; G.nextW = G.W + 8; G.stT = 0;
+  toast(`스테이지 ${G.wave}`);
   updateHUD();
 }
+function advance(dt) {
+  const dx = WALK * dt; G.W += dx;
+  for (const e of G.enemies) e.pos.x -= dx;
+  for (const p of G.proj) p.mesh.position.x -= dx;
+  for (const f of G.fx) f.mesh.position.x -= dx;
+  for (const u of G.turrets) { u.pos.x -= dx; u.mesh.position.x -= dx; }
+}
+function stageFlow(dt) {
+  G.marching = false; G.stT += dt;
+  const alive = G.enemies.filter(e => e.alive);
+  if (G.state === 'walk') {
+    G.marching = true; advance(dt);
+    if (G.W >= G.nextW) {
+      if (G.packNo < 3) { G.spawnQ = [...G.packs[G.packNo]]; G.packNo++; G.spawnT = 0; G.waveActive = true; G.state = 'fight'; G.stT = 0; }
+      else { G.spawnQ = [bossOf(G.wave)]; G.spawnT = 0; G.waveActive = true; G.state = 'boss'; G.stT = 0; toast(`${ENEMIES[bossOf(G.wave)].name} 등장!`); }
+    }
+  } else if (G.state === 'fight' || G.state === 'boss') {
+    if (!alive.some(e => e.pos.x < 12) && (alive.length || G.spawnQ.length)) { G.marching = true; advance(dt); }
+    if (!alive.length && !G.spawnQ.length) {
+      G.heroes.forEach(h => { if (!h.alive) { h.alive = true; h.hp = h.maxhp * .4; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); } else h.hp = Math.min(h.maxhp, h.hp + h.maxhp * .25); });
+      G.waveActive = false; G.stT = 0; G.packsDone++;
+      if (G.state === 'boss') { G.boss = null; G.packsDone = 4; G.state = 'relight'; toast('길목의 등불에 불을 붙입니다'); }
+      else { G.state = 'breather'; }
+    }
+  } else if (G.state === 'breather') {
+    if (G.stT > 1) { G.state = 'walk'; G.nextW = G.W + 8 + Math.random() * 3; G.stT = 0; }
+  } else if (G.state === 'relight') {
+    if (G.stT > 2.2) { G.state = 'choice'; offerUpgrade(); }
+  } else if (G.state === 'wipe') {
+    if (G.stT > 2) {
+      if (G.flames <= 0) { end(); return; }
+      G.enemies.forEach(e => scene.remove(e.inst.wrap)); G.enemies = []; G.spawnQ = []; G.boss = null;
+      G.heroes.forEach(h => { h.alive = true; h.hp = h.maxhp; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); });
+      G.wave = Math.max(1, G.wave - 1); G.state = 'init'; beginStage(); toast(`파티가 스테이지 ${G.wave}로 물러납니다`);
+    }
+  }
+}
+function nextWave() { G.wave++; G.state = 'init'; beginStage(); }
 function spawnEnemy(key) {
   const d = ENEMIES[key]; const inst = makeInstance(d.gltf, d.h, d.mode || 'y', d.yaw);
-  const a = Math.random() * Math.PI * 2; const SR = +(Q.get('r') || ARENA); const pos = new THREE.Vector3(Math.cos(a) * SR, 0, Math.sin(a) * SR);
-  const sc = 1 + G.wave * (d.boss ? .12 : .09);
-  const e = { key, def: d, inst, pos, hp: d.hp * sc, maxhp: d.hp * sc, dmg: d.dmg * (1 + G.wave * .06), atkCd: 0, alive: true, clipW: findClip(inst.clips, d.walk), clipA: findClip(inst.clips, d.atk), dying: 0, hitFlash: 0 };
+  const sx = 15 + Math.random() * 5; const pos = new THREE.Vector3(sx, 0, roadZ(G.W + sx) + (Math.random() - .5) * 5);
+  const sc = d.boss ? 1600 * (.6 + G.wave * .13) / d.hp : 1 + G.wave * .09; // stage bosses share one strength curve, the model only changes the look
+  const e = { key, def: d, inst, pos, hp: d.hp * sc, maxhp: d.hp * sc, dmg: (d.boss ? 30 : d.dmg) * (1 + G.wave * .06), atkCd: 0, alive: true, clipW: findClip(inst.clips, d.walk), clipA: findClip(inst.clips, d.atk), dying: 0, hitFlash: 0 };
   inst.wrap.position.copy(pos); scene.add(inst.wrap); play(inst, e.clipW);
   G.enemies.push(e); if (d.boss) G.boss = e; return e;
 }
@@ -387,7 +425,7 @@ function heroSkill(h) {
 function end(win) {
   G.over = true; const gain = G.earned; save.embers += gain; save.best = Math.max(save.best, G.wave - 1); persist();
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>등불이 꺼졌습니다</h1><p>도달 웨이브 ${G.wave} · 처치 ${G.kills} · 획득 엠버 ${gain}</p><button class="mbtn" id="again">다시 출정</button><br><button class="ghost" id="tomenu">영웅 선택으로</button>`;
+  m.innerHTML = `<h1>등불이 꺼졌습니다</h1><p>도달 스테이지 ${G.wave} · 처치 ${G.kills} · 획득 엠버 ${gain}</p><button class="mbtn" id="again">다시 출정</button><br><button class="ghost" id="tomenu">영웅 선택으로</button>`;
   $('again').onclick = () => startGame(); $('tomenu').onclick = () => { m.classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden'); cleanup(); renderMenu(); };
 }
 function offerUpgrade() {
@@ -402,7 +440,7 @@ function offerUpgrade() {
     if (G.wave === 25 && !G.won) { G.won = true; extra += '<p style="color:#8fe0ff">등불의 심장을 지켜냈습니다! 계속하면 무한 모드입니다.</p>'; }
   }
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>웨이브 ${G.wave} 클리어</h1>${extra}<p>강화를 하나 고르세요</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}</b><br>${u.desc}</button>`).join('');
+  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>강화를 하나 고르세요</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}</b><br>${u.desc}</button>`).join('');
   m.querySelectorAll('.opt').forEach(b => b.onclick = () => { pool[+b.dataset.i].apply(G); m.classList.add('hidden'); G.paused = false; nextWave(); });
 }
 
@@ -414,7 +452,8 @@ function update(dt) {
   // timers
   for (const t of G.timers) t.t -= dt; const due = G.timers.filter(t => t.t <= 0); G.timers = G.timers.filter(t => t.t > 0); due.forEach(t => t.fn());
   // spawning
-  if (G.waveActive && G.spawnQ.length) { G.spawnT -= dt; if (G.spawnT <= 0) { const k = G.spawnQ.shift(); spawnEnemy(k); G.spawnT = Math.max(.25, 1.1 - G.wave * .03); } }
+  CEN.set(0, 0, roadZ(G.W)); stageFlow(dt);
+  if (G.waveActive && G.spawnQ.length) { G.spawnT -= dt; if (G.spawnT <= 0) { const k = G.spawnQ.shift(); spawnEnemy(k); G.spawnT = Math.max(.25, .9 - G.wave * .02); } }
   const living = G.heroes.filter(h => h.alive);
   // heroes
   const inp = new THREE.Vector3((keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + stickVec.x, 0, (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + stickVec.y);
@@ -430,17 +469,18 @@ function update(dt) {
     else if (manual) { tmp.copy(leader.pos).add(new THREE.Vector3(Math.cos(h.idx * 1.3) * 2.2, 0, Math.sin(h.idx * 1.3) * 2.2 + 1)); const dd = tmp.sub(h.pos); if (dd.length() > 1.2) move.copy(dd).normalize(); }
     else if (tgt) { // delegated AI by role
       const dist = tgt.pos.distanceTo(h.pos); const hold = d.ranged || d.keep ? d.range * .7 : d.range * .8;
-      const fromLantern = h.pos.length();
-      if (d.keep === 'home') { const home = new THREE.Vector3(Math.cos(h.idx * 1.26) * 3.5, 0, Math.sin(h.idx * 1.26) * 3.5); const dd = home.sub(h.pos); if (dd.length() > .8) move.copy(dd).normalize(); }
+      const fromLantern = h.pos.distanceTo(CEN);
+      if (d.keep === 'home') { const home = new THREE.Vector3(Math.cos(h.idx * 1.26) * 3.5, 0, Math.sin(h.idx * 1.26) * 3.5).add(CEN); const dd = home.sub(h.pos); if (dd.length() > .8) move.copy(dd).normalize(); }
       else if (dist > hold) move.copy(tgt.pos).sub(h.pos).setY(0).normalize();
       else if ((d.ranged || d.keep) && dist < d.range * .4) move.copy(h.pos).sub(tgt.pos).setY(0).normalize();
-      if (fromLantern > 17 && move.dot(h.pos) > 0) move.set(0, 0, 0);
-    } else { const home = new THREE.Vector3(Math.cos(h.idx * 1.26) * 4, 0, Math.sin(h.idx * 1.26) * 4 + 1); const dd = home.sub(h.pos); if (dd.length() > .8) move.copy(dd).normalize(); }
+      if (fromLantern > 17 && move.dot(tmp.copy(h.pos).sub(CEN)) > 0) move.set(0, 0, 0);
+    } else { const home = new THREE.Vector3(Math.cos(h.idx * 1.26) * 4, 0, Math.sin(h.idx * 1.26) * 4 + 1).add(CEN); const dd = home.sub(h.pos); if (dd.length() > .8) move.copy(dd).normalize(); }
     if (h.busy <= 0) { // moving
       if (move.lengthSq() > .01) { h.pos.addScaledVector(move, speed * dt); faceTo(h.inst.wrap, move, dt); play(h.inst, speed > 5 ? h.clips.run : h.clips.walk || h.clips.run, { speed: speed > 5 ? 1 : speed / 3.2 }); }
+      else if (G.marching) { faceTo(h.inst.wrap, EAST, dt, 6); play(h.inst, h.clips.walk || h.clips.run, { speed: 1 }); }
       else play(h.inst, h.clips.idle);
     }
-    const len = h.pos.length(); if (len > ARENA - 1) h.pos.multiplyScalar((ARENA - 1) / len);
+    { tmp.copy(h.pos).sub(CEN); const len = tmp.length(); if (len > ARENA - 1) h.pos.copy(CEN).addScaledVector(tmp, (ARENA - 1) / len); }
     h.inst.wrap.position.copy(h.pos);
     if (tgt && tgt.pos.distanceTo(h.pos) <= d.range) {
       tmp.copy(tgt.pos).sub(h.pos); if (h.busy > 0 || move.lengthSq() < .01) faceTo(h.inst.wrap, tmp, dt, 20);
@@ -452,17 +492,17 @@ function update(dt) {
   }
   // aura buff handled as flat bonus on heroes with aura role: +25% to rate while buffT>0
   // enemies
-  const lp = new THREE.Vector3(0, 0, 0);
+  const lp = CEN;
   for (const e of G.enemies) {
     if (!e.alive) { e.dying -= dt * 1.4; e.inst.wrap.scale.setScalar(Math.max(.001, e.dying)); e.inst.wrap.position.y = -(1 - Math.max(0, e.dying)) * .5; continue; }
     e.atkCd -= dt; e.slow = (e.slow || 0) - dt; e.hitFlash -= dt;
-    const th = nearest(living, e.pos, 6); const target = th ? th.pos : lp; const dist = e.pos.distanceTo(target);
+    const th = nearest(living, e.pos, 60); const target = th ? th.pos : lp; const dist = e.pos.distanceTo(target);
     const reach = (e.def.reach || 1.6) + (th ? 0 : 1.5);
     let sp = e.def.speed * (e.slow > 0 ? .45 : 1);
     if (dist > reach) { tmp.copy(target).sub(e.pos).setY(0).normalize(); e.pos.addScaledVector(tmp, sp * dt); faceTo(e.inst.wrap, tmp, dt, 8); play(e.inst, e.clipW, { speed: Math.max(.6, sp / e.def.animSpeed) }); }
     else {
       tmp.copy(target).sub(e.pos); faceTo(e.inst.wrap, tmp, dt, 14);
-      if (e.atkCd <= 0) { e.atkCd = e.def.cd; play(e.inst, e.clipA, { loop: false, fade: .1 }); const dmg = e.dmg; const hh = th; after(e.def.hitT || .4, () => { if (!e.alive) return; if (hh) damageHero(hh, dmg); else { G.lantern -= dmg * .5; if (G.lantern <= 0 && !G.over) end(); } if (e.def.boss) ring(e.pos, 4, 0xff3b3b, .4), G.heroes.forEach(x => x.alive && x.pos.distanceTo(e.pos) < 4 && x !== hh && damageHero(x, dmg * .5)); }); }
+      if (e.atkCd <= 0) { e.atkCd = e.def.cd; play(e.inst, e.clipA, { loop: false, fade: .1 }); const dmg = e.dmg; const hh = th; after(e.def.hitT || .4, () => { if (!e.alive) return; if (hh) damageHero(hh, dmg); if (e.def.boss) ring(e.pos, 4, 0xff3b3b, .4), G.heroes.forEach(x => x.alive && x.pos.distanceTo(e.pos) < 4 && x !== hh && damageHero(x, dmg * .5)); }); }
       else if (e.inst.cur && e.inst.cur.isRunning && !e.inst.cur.isRunning()) play(e.inst, e.clipW);
     }
     e.inst.wrap.position.copy(e.pos);
@@ -482,12 +522,12 @@ function update(dt) {
   // fx
   for (const f of G.fx) { f.life -= dt; const k = 1 - f.life / f.max; f.mesh.scale.setScalar(.3 + k * .7 + .01); f.mesh.material.opacity = Math.max(0, .8 * (1 - k)); }
   G.fx = G.fx.filter(f => { if (f.life <= 0) scene.remove(f.mesh); return f.life > 0; });
-  // wave end
-  if (G.waveActive && !G.spawnQ.length && G.enemies.every(e => !e.alive) && !G.over) { G.boss = null; offerUpgrade(); }
-  if (!G.over && living.length === 0 && G.heroes.length) end();
+  if (!G.over && G.state !== 'wipe' && G.state !== 'init' && living.length === 0 && G.heroes.length) { G.state = 'wipe'; G.stT = 0; G.flames--; toast(G.flames > 0 ? '불꽃이 하나 꺼졌습니다' : '마지막 불꽃이 꺼졌습니다'); }
   // lantern glow
-  const pulse = .85 + Math.sin(G.t * 3) * .1; lantern.userData.light.intensity = 110 * pulse * (.5 + .5 * Math.max(0, G.lantern) / G.lanternMax);
-  { const c = new THREE.Vector3(); let n = 0; living.forEach(h => { c.add(h.pos); n++; }); if (n) { c.multiplyScalar(.75 / n); camTarget.lerp(c, Math.min(1, dt * 3)); camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1); } }
+  const pulse = .85 + Math.sin(G.t * 3) * .1; lantern.userData.light.intensity = 110 * pulse * (.72 + .0933 * Math.max(0, G.flames));
+  { const c = new THREE.Vector3(); let n = 0; living.forEach(h => { c.add(h.pos); n++; }); if (n) { c.multiplyScalar(.75 / n); c.x += 3; camTarget.lerp(c, Math.min(1, dt * 3)); camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1); } }
+  { const rem = G.W - SZ * Math.round(G.W / SZ); world.position.x = -rem; if (grassMesh) grassMesh.position.x = -rem; const ox = G.W / SZ + .5; groundMat.map.offset.set(ox, .5); groundMat.roughnessMap.offset.set(ox, .5); }
+  lantern.position.set(-1.8, 0, CEN.z); embers.position.copy(lantern.position);
   tickEmbers(G.t, dt);
   updateHUD();
 }

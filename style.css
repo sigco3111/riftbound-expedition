@@ -7,7 +7,7 @@ html,body{margin:0;height:100%;background:#0b0f1a;color:#e8ecf5;font-family:syst
 #top{position:absolute;left:0;right:0;top:0;display:flex;gap:10px;align-items:center;padding:8px 10px;background:linear-gradient(#0b0f1acc,#0b0f1a00);font-size:14px}
 #lanternBar{position:relative;flex:1;height:18px;background:#1b2234;border:1px solid #38425e;border-radius:9px;overflow:hidden}
 #lanternFill{height:100%;width:100%;background:linear-gradient(90deg,#ff9b3d,#ffd36b)}
-#lanternTxt{position:absolute;inset:0;text-align:center;font-size:12px;line-height:18px;color:#101522;font-weight:700}
+#lanternTxt{position:absolute;inset:0;text-align:center;font-size:12px;line-height:18px;color:#fff3d0;text-shadow:0 0 3px #000,0 0 2px #000;font-weight:700}
 #modeBtn{background:#27314b;color:#ffd36b;border:1px solid #4a5780;border-radius:8px;padding:6px 10px;font-size:13px}
 #synergy{position:absolute;left:10px;top:44px;display:flex;flex-wrap:wrap;gap:4px;max-width:70%}
 .chip{background:#1b2234cc;border:1px solid #4a5780;border-radius:10px;padding:2px 8px;font-size:11px;color:#ffd36b}
