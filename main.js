@@ -438,7 +438,7 @@ function rollGear() {
   (G.gear = G.gear || []).push(`${g[0]} ${k[0]}`);
   return `<p style="color:${g[2]}">전리품: ${g[0]} ${k[0]} (${k[1]} +${Math.round((k[0] === '방어구' ? .04 : k[0] === '무기' ? .03 : .025) * g[1] * 100)}%)</p>`;
 }
-const xpNeed = L => Math.round(14 * Math.pow(1.32, L - 1) + 5 * (L - 1));
+const xpNeed = L => Math.round(20 * Math.pow(1.4, L - 1) + 7 * (L - 1));
 function addXp(x) { G.xp += x; let n = xpNeed(G.level); while (G.xp >= n) { G.xp -= n; G.level++; G.pendingCards++; toast(`레벨 ${G.level}`); n = xpNeed(G.level); } }
 // 레벨업 카드: 파티 공용 + 편성에 있는 역할별 카드. 같은 카드는 3번까지 중첩.
 function cardPool() {
