@@ -447,6 +447,8 @@ function offerUpgrade() {
 // ---------- loop ----------
 const TS = Math.max(1, parseInt(Q.get('ts') || '1', 10)); const clock = new THREE.Clock(); const tmp = new THREE.Vector3();
 function faceTo(wrap, dir, dt, rate = 12) { if (dir.lengthSq() < 1e-6) return; const a = Math.atan2(dir.x, dir.z); let d = a - wrap.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); wrap.rotation.y += d * Math.min(1, dt * rate); }
+// party walks as a column along the road, lantern bearer at the front
+function colHome(i) { return new THREE.Vector3(1.2 - i * 1.7, 0, (i % 2 ? .9 : -.9)); }
 function update(dt) {
   G.t += dt;
   // timers
@@ -470,11 +472,11 @@ function update(dt) {
     else if (tgt) { // delegated AI by role
       const dist = tgt.pos.distanceTo(h.pos); const hold = d.ranged || d.keep ? d.range * .7 : d.range * .8;
       const fromLantern = h.pos.distanceTo(CEN);
-      if (d.keep === 'home') { const home = new THREE.Vector3(Math.cos(h.idx * 1.26) * 3.5, 0, Math.sin(h.idx * 1.26) * 3.5).add(CEN); const dd = home.sub(h.pos); if (dd.length() > .8) move.copy(dd).normalize(); }
+      if (d.keep === 'home') { const home = colHome(h.idx).add(CEN); const dd = home.sub(h.pos); if (dd.length() > .8) move.copy(dd).normalize(); }
       else if (dist > hold) move.copy(tgt.pos).sub(h.pos).setY(0).normalize();
       else if ((d.ranged || d.keep) && dist < d.range * .4) move.copy(h.pos).sub(tgt.pos).setY(0).normalize();
       if (fromLantern > 17 && move.dot(tmp.copy(h.pos).sub(CEN)) > 0) move.set(0, 0, 0);
-    } else { const home = new THREE.Vector3(Math.cos(h.idx * 1.26) * 4, 0, Math.sin(h.idx * 1.26) * 4 + 1).add(CEN); const dd = home.sub(h.pos); if (dd.length() > .8) move.copy(dd).normalize(); }
+    } else { const home = colHome(h.idx).add(CEN); const dd = home.sub(h.pos); if (dd.length() > .8) move.copy(dd).normalize(); }
     if (h.busy <= 0) { // moving
       if (move.lengthSq() > .01) { h.pos.addScaledVector(move, speed * dt); faceTo(h.inst.wrap, move, dt); play(h.inst, speed > 5 ? h.clips.run : h.clips.walk || h.clips.run, { speed: speed > 5 ? 1 : speed / 3.2 }); }
       else if (G.marching) { faceTo(h.inst.wrap, EAST, dt, 6); play(h.inst, h.clips.walk || h.clips.run, { speed: 1 }); }
