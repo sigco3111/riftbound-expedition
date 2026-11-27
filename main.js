@@ -30,11 +30,12 @@ scene.background = new THREE.Color(0x0a1020);
 scene.fog = new THREE.FogExp2(0x1a2c4e, 0.024);
 const camera = new THREE.PerspectiveCamera(46, 1, 0.1, 400);
 const camOff = new THREE.Vector3(), camTarget = new THREE.Vector3();
+let PORT = false;
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   const portrait = camera.aspect < 0.8;
-  camOff.set(0, portrait ? 19 : 8, portrait ? 12.5 : 15);
+  camOff.set(0, portrait ? 27 : 8, portrait ? 15 : 15); camera.fov = portrait ? 62 : 46; PORT = portrait;
   camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1);
   camera.updateProjectionMatrix();
   if (composer) composer.setSize(innerWidth, innerHeight);
@@ -527,7 +528,7 @@ function update(dt) {
   if (!G.over && G.state !== 'wipe' && G.state !== 'init' && living.length === 0 && G.heroes.length) { G.state = 'wipe'; G.stT = 0; G.flames--; toast(G.flames > 0 ? '불꽃이 하나 꺼졌습니다' : '마지막 불꽃이 꺼졌습니다'); }
   // lantern glow
   const pulse = .85 + Math.sin(G.t * 3) * .1; lantern.userData.light.intensity = 110 * pulse * (.72 + .0933 * Math.max(0, G.flames));
-  { const c = new THREE.Vector3(); let n = 0; living.forEach(h => { c.add(h.pos); n++; }); if (n) { c.multiplyScalar(.75 / n); c.x += 3; camTarget.lerp(c, Math.min(1, dt * 3)); camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1); } }
+  { const c = new THREE.Vector3(); let n = 0; living.forEach(h => { c.add(h.pos); n++; }); if (n) { c.multiplyScalar(.75 / n); c.x += PORT ? 1.5 : 3; camTarget.lerp(c, Math.min(1, dt * 3)); camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1); } }
   { const rem = G.W - SZ * Math.round(G.W / SZ); world.position.x = -rem; if (grassMesh) grassMesh.position.x = -rem; const ox = G.W / SZ + .5; groundMat.map.offset.set(ox, .5); groundMat.roughnessMap.offset.set(ox, .5); }
   lantern.position.set(-1.8, 0, CEN.z); embers.position.copy(lantern.position);
   tickEmbers(G.t, dt);
