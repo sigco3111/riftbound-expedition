@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
-import { HEROES, ERA, ENEMIES, UPGRADES, CREDITS } from './data.js';
+import { HEROES, ERA, ENEMIES, UPGRADES, CREDITS, ZONES } from './data.js';
 
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
@@ -20,33 +20,78 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a1020);
 scene.fog = new THREE.Fog(0x0a1020, 30, 80);
 const camera = new THREE.PerspectiveCamera(48, 1, 0.1, 200);
+const camOff = new THREE.Vector3(), camTarget = new THREE.Vector3();
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   const portrait = camera.aspect < 0.8;
-  camera.position.set(0, portrait ? 22 : 13, portrait ? 14 : 10.5);
-  camera.lookAt(0, 0, 1);
+  camOff.set(0, portrait ? 19 : 13, portrait ? 12.5 : 10.5);
+  camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1);
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize); resize();
-scene.add(new THREE.HemisphereLight(0xb4c6ff, 0x3a3048, 1.6));
+const hemi = new THREE.HemisphereLight(0xb4c6ff, 0x3a3048, 1.6); scene.add(hemi);
 const moon = new THREE.DirectionalLight(0xc7d6ff, 1.4); moon.position.set(-10, 20, 8); scene.add(moon);
 const ARENA = 19;
-{
-  const g = new THREE.Mesh(new THREE.CircleGeometry(ARENA + 14, 64), new THREE.MeshStandardMaterial({ color: 0x2b3650, roughness: 1 }));
-  g.rotation.x = -Math.PI / 2; scene.add(g);
-  const ring = new THREE.Mesh(new THREE.RingGeometry(ARENA - 0.2, ARENA + 0.2, 80), new THREE.MeshBasicMaterial({ color: 0x5a3b1a }));
-  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.02; scene.add(ring);
-  // debris of three swallowed eras (primitives only): ruined wall, wrecked car, ship fragment
-  const rnd = (() => { let s = 7; return () => (s = (s * 16807) % 2147483647) / 2147483647; })();
-  const mats = [0x5b4a3a, 0x3e4b66, 0x5e4b7a].map(c => new THREE.MeshStandardMaterial({ color: c, roughness: .9 }));
-  for (let i = 0; i < 46; i++) {
-    const a = rnd() * Math.PI * 2, r = ARENA + 2 + rnd() * 10, k = i % 3;
-    const geo = k === 0 ? new THREE.BoxGeometry(2 + rnd() * 2, 1 + rnd() * 3, .8) : k === 1 ? new THREE.BoxGeometry(2.4, .9, 1.2) : new THREE.ConeGeometry(.9 + rnd(), 2 + rnd() * 3, 5);
-    const m = new THREE.Mesh(geo, mats[k]); m.position.set(Math.cos(a) * r, geo.parameters.height ? geo.parameters.height / 2 : 1, Math.sin(a) * r);
-    m.rotation.y = rnd() * 6; m.rotation.z = (rnd() - .5) * .5; scene.add(m);
-  }
+function skyTexture(top, bot) {
+  const c = document.createElement('canvas'); c.width = 16; c.height = 512; const g = c.getContext('2d');
+  const gr = g.createLinearGradient(0, 0, 0, 512); gr.addColorStop(0, top); gr.addColorStop(1, bot); g.fillStyle = gr; g.fillRect(0, 0, 16, 512);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
 }
+function groundTexture() {
+  const S = 1024, c = document.createElement('canvas'); c.width = c.height = S; const g = c.getContext('2d');
+  g.fillStyle = '#6a7390'; g.fillRect(0, 0, S, S);
+  let seed = 3; const r = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  for (let i = 0; i < 900; i++) { const x = r() * S, y = r() * S, w = 14 + r() * 40; g.fillStyle = `rgba(${40 + r() * 50},${45 + r() * 50},${70 + r() * 50},${.25 + r() * .3})`; g.fillRect(x, y, w, w * (.5 + r())); }
+  g.strokeStyle = 'rgba(15,18,30,.55)'; g.lineWidth = 2;
+  for (let i = 0; i <= 16; i++) { g.beginPath(); g.moveTo(i * 64, 0); g.lineTo(i * 64, S); g.stroke(); g.beginPath(); g.moveTo(0, i * 64); g.lineTo(S, i * 64); g.stroke(); }
+  g.strokeStyle = 'rgba(255,190,110,.9)'; g.lineWidth = 5; g.beginPath(); g.arc(S / 2, S / 2, S * .17, 0, 7); g.stroke();
+  g.lineWidth = 3; g.beginPath(); g.arc(S / 2, S / 2, S * .26, 0, 7); g.stroke();
+  for (let i = 0; i < 12; i++) { const a = i / 12 * 6.283; g.beginPath(); g.moveTo(S / 2 + Math.cos(a) * S * .17, S / 2 + Math.sin(a) * S * .17); g.lineTo(S / 2 + Math.cos(a) * S * .26, S / 2 + Math.sin(a) * S * .26); g.stroke(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; return t;
+}
+const groundMat = new THREE.MeshStandardMaterial({ map: groundTexture(), roughness: 1 });
+{
+  const g = new THREE.Mesh(new THREE.CircleGeometry(ARENA + 18, 64), groundMat);
+  g.rotation.x = -Math.PI / 2; scene.add(g);
+  const ring = new THREE.Mesh(new THREE.RingGeometry(ARENA - 0.25, ARENA + 0.25, 80), new THREE.MeshBasicMaterial({ color: 0xffa24a }));
+  ring.rotation.x = -Math.PI / 2; ring.position.y = 0.03; scene.add(ring);
+  // stars + moon
+  const sp = []; for (let i = 0; i < 400; i++) { const a = Math.random() * 6.283, e = Math.random() * 1.2 + .1, R = 150; sp.push(Math.cos(a) * Math.cos(e) * R, Math.sin(e) * R * .7 + 10, Math.sin(a) * Math.cos(e) * R - 20); }
+  const sg = new THREE.BufferGeometry(); sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3));
+  scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xdfe8ff, size: 1.1, sizeAttenuation: false, fog: false })));
+  const mo = new THREE.Mesh(new THREE.SphereGeometry(7, 24, 16), new THREE.MeshBasicMaterial({ color: 0xdde6ff, fog: false })); mo.position.set(-60, 55, -110); scene.add(mo);
+}
+// zone-themed debris of the swallowed eras (primitives only)
+const world = new THREE.Group(); scene.add(world);
+const box = (w, h, d, m, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); o.position.set(x, y, z); return o; };
+function makeWall(M) { const g = new THREE.Group(); g.add(box(5, 3, 1, M.stone, 0, 1.5, 0)); for (let i = 0; i < 4; i++) g.add(box(.9, .8, 1.1, M.stone, -1.9 + i * 1.27, 3.4, 0)); g.add(box(1.6, 5, 1.6, M.stone, 3, 2.5, 0)); return g; }
+function makeCar(M) { const g = new THREE.Group(); g.add(box(3.4, .9, 1.6, M.car, 0, .8, 0)); g.add(box(1.8, .8, 1.4, M.glass, -.2, 1.6, 0)); for (const [x, z] of [[-1.1, .8], [1.1, .8], [-1.1, -.8], [1.1, -.8]]) { const w = new THREE.Mesh(new THREE.CylinderGeometry(.4, .4, .3, 10), M.dark); w.rotation.x = Math.PI / 2; w.position.set(x, .4, z); g.add(w); } return g; }
+function makePod(M) { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(1.4, 1.9, 3.6, 8), M.hull); b.position.y = 1.4; g.add(b); const band = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.5, .3, 8), M.glow); band.position.y = 2.2; g.add(band); const fin = box(.3, 2.2, 2.4, M.hull, 1.7, 1, 0); g.add(fin); return g; }
+function makeCrystal(M) { const g = new THREE.Group(); for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.ConeGeometry(.5 + Math.random() * .5, 2.5 + Math.random() * 3.5, 5), M.crystal); c.position.set((Math.random() - .5) * 2.4, 1.4, (Math.random() - .5) * 2.4); c.rotation.z = (Math.random() - .5) * .5; g.add(c); } return g; }
+function buildWorld(zi) {
+  const Z = ZONES[zi % ZONES.length];
+  world.clear();
+  const M = { stone: new THREE.MeshStandardMaterial({ color: Z.stone, roughness: 1 }), car: new THREE.MeshStandardMaterial({ color: Z.car, roughness: .7 }), glass: new THREE.MeshStandardMaterial({ color: 0x223044, roughness: .3 }), dark: new THREE.MeshStandardMaterial({ color: 0x15171d }), hull: new THREE.MeshStandardMaterial({ color: Z.hull, roughness: .5, metalness: .4 }), glow: new THREE.MeshBasicMaterial({ color: Z.glow }), crystal: new THREE.MeshStandardMaterial({ color: Z.glow, emissive: Z.glow, emissiveIntensity: .8, roughness: .3 }) };
+  let seed = 11 + zi * 17; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const mk = [makeWall, makeCar, makePod, makeCrystal];
+  for (let i = 0; i < 40; i++) {
+    const kind = Z.mix[Math.floor(rnd() * Z.mix.length)];
+    const o = mk[kind](M); const a = rnd() * Math.PI * 2, r = ARENA + 2.5 + rnd() * 11;
+    o.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); o.rotation.y = rnd() * 6.28; o.rotation.z = (rnd() - .5) * .35; o.scale.setScalar(.9 + rnd() * .8); world.add(o);
+  }
+  for (let i = 0; i < 14; i++) { const o = new THREE.Mesh(new THREE.DodecahedronGeometry(.3 + rnd() * .5), M.stone); const a = rnd() * 6.28, r = 7 + rnd() * 11; o.position.set(Math.cos(a) * r, .2, Math.sin(a) * r); world.add(o); }
+  // rift cracks on the ground
+  const cm = new THREE.MeshBasicMaterial({ color: Z.glow });
+  for (let i = 0; i < 6; i++) { const a = rnd() * 6.28; const cr = box(.25, .04, 3 + rnd() * 4, cm, Math.cos(a) * (ARENA - 3), .05, Math.sin(a) * (ARENA - 3)); cr.rotation.y = a + 1.57 + (rnd() - .5); world.add(cr); }
+  scene.background = skyTexture(Z.skyTop, Z.skyBot); scene.fog.color.set(Z.fog); groundMat.color.set(Z.ground); hemi.color.set(Z.hemi); moon.color.set(Z.moon);
+}
+// floating embers around the lantern
+const emberGeo = new THREE.BufferGeometry(); const EN = 140; const emberPos = new Float32Array(EN * 3); const emberSeed = [];
+for (let i = 0; i < EN; i++) { emberSeed.push({ a: Math.random() * 6.28, r: 1 + Math.random() * 9, y: Math.random() * 6, v: .3 + Math.random() * .7 }); }
+emberGeo.setAttribute('position', new THREE.BufferAttribute(emberPos, 3));
+const embers = new THREE.Points(emberGeo, new THREE.PointsMaterial({ color: 0xffb455, size: .12, transparent: true, opacity: .85, depthWrite: false })); scene.add(embers);
+function tickEmbers(t, dt) { for (let i = 0; i < EN; i++) { const e = emberSeed[i]; e.y += e.v * dt; if (e.y > 7) e.y = 0; emberPos[i * 3] = Math.cos(e.a + t * .1 * e.v) * e.r; emberPos[i * 3 + 1] = e.y; emberPos[i * 3 + 2] = Math.sin(e.a + t * .1 * e.v) * e.r; } emberGeo.attributes.position.needsUpdate = true; }
 // lantern
 const lantern = new THREE.Group();
 {
@@ -115,26 +160,50 @@ function computeSynergy(ids) {
 }
 
 // ---------- menu ----------
+const SKILL_DESC = { barrier: '등불 방벽: 파티 전체가 잠시 피해를 줄이는 방벽', heal: '치유: 파티와 등불을 회복', aoe: '범위 마법: 적 무리에 광역 피해와 감속', pull: '중력장: 적을 끌어당기고 늦춤', turret: '포탑 설치: 일정 시간 자동 사격', trap: '함정 설치: 밟으면 폭발하며 감속', volley: '연속 사격: 여러 발을 연달아 발사', dash: '돌진 타격: 적에게 뛰어들어 범위 피해', aura: '지휘 오라: 파티 공격 속도 +25% (5초)', gold: '보급' };
+let eraTab = 'all';
 function renderMenu() {
   $('meta').textContent = `보유 엠버 ${save.embers} · 최고 웨이브 ${save.best} · 해금 ${save.unlocked.length}/21`;
+  const tabs = $('tabs'); tabs.innerHTML = '';
+  [['all', '전체'], ['medieval', '중세'], ['modern', '현대'], ['space', '우주']].forEach(([k, n]) => { const b = document.createElement('button'); b.className = 'tab' + (eraTab === k ? ' on' : ''); b.textContent = n; b.onclick = () => { eraTab = k; renderMenu(); }; tabs.appendChild(b); });
   const grid = $('grid'); grid.innerHTML = '';
-  HEROES.forEach(h => {
+  HEROES.filter(h => eraTab === 'all' || h.era === eraTab).forEach(h => {
     const unlocked = save.unlocked.includes(h.id);
     const d = document.createElement('div');
     d.className = `hc e-${h.era}` + (selected.includes(h.id) ? ' sel' : '') + (unlocked ? '' : ' lock');
-    d.innerHTML = `<b>${h.name}</b><span class="era" style="color:${ERA[h.era].color}">${ERA[h.era].name}</span> · ${h.roleName}<br>${unlocked ? h.blurb : `🔒 ${h.cost} 엠버`}`;
-    d.onclick = () => {
-      if (!unlocked) { if (save.embers >= h.cost) { save.embers -= h.cost; save.unlocked.push(h.id); persist(); } else { $('preview').textContent = `엠버가 부족합니다 (${h.cost} 필요)`; return; } }
-      else if (selected.includes(h.id)) selected = selected.filter(x => x !== h.id);
-      else if (selected.length < 5) selected.push(h.id);
-      renderMenu();
-    };
+    d.innerHTML = `<b>${h.name}</b><span class="era" style="color:${ERA[h.era].color}">${ERA[h.era].name}</span> · ${h.roleName}<br>${unlocked ? h.blurb : `🔒 ${h.cost} 엠버`}<span class="info">i</span>${selected.includes(h.id) ? '<span class="pick">편성 ' + (selected.indexOf(h.id) + 1) + '</span>' : ''}`;
+    d.querySelector('.info').onclick = e => { e.stopPropagation(); openDetail(h); };
+    d.onclick = () => toggleHero(h);
     grid.appendChild(d);
   });
+  const slots = $('slots'); slots.innerHTML = '';
+  for (let i = 0; i < 5; i++) { const id = selected[i]; const d = document.createElement('div'); d.className = 'slot' + (id ? ' full' : ''); d.textContent = id ? heroById[id].name : `빈 슬롯 ${i + 1}`; if (id) { d.style.borderColor = ERA[heroById[id].era].color; d.onclick = () => { selected = selected.filter(x => x !== id); renderMenu(); }; } slots.appendChild(d); }
   const S = computeSynergy(selected);
-  $('preview').innerHTML = selected.length ? (S.chips.length ? S.chips.map(c => `<span class="chip">${c}</span>`).join(' ') : '활성 시너지 없음') : '영웅을 눌러 파티에 넣으세요.';
+  $('preview').innerHTML = selected.length ? (S.chips.length ? S.chips.map(c => `<span class="chip">${c}</span>`).join(' ') : '활성 시너지 없음 (같은 시대 2명 이상이면 발동)') : '영웅을 눌러 파티에 넣으세요. i 버튼은 상세/3D 보기.';
   const b = $('startBtn'); b.disabled = selected.length < 1; b.textContent = selected.length === 5 ? '출정' : `출정 (${selected.length}/5명)`;
   $('credits').innerHTML = CREDITS;
+}
+function toggleHero(h) {
+  const unlocked = save.unlocked.includes(h.id);
+  if (!unlocked) { if (save.embers >= h.cost) { if (confirm(`${h.name} 해금: 엠버 ${h.cost}`)) { save.embers -= h.cost; save.unlocked.push(h.id); persist(); } } else { $('preview').textContent = `엠버가 부족합니다 (${h.cost} 필요)`; return; } }
+  else if (selected.includes(h.id)) selected = selected.filter(x => x !== h.id);
+  else if (selected.length < 5) selected.push(h.id);
+  renderMenu();
+}
+// 3D detail preview (own renderer)
+let pv = null;
+async function openDetail(h) {
+  $('detail').classList.remove('hidden');
+  const unlocked = save.unlocked.includes(h.id);
+  $('dtext').innerHTML = `<b style="font-size:16px">${h.name}</b> <span style="color:${ERA[h.era].color}">${ERA[h.era].name} · ${h.roleName}</span><br>${h.blurb}<br>체력 ${h.hp} · 공격력 ${h.dmg || '-'} · 공속 ${h.rate} · 사거리 ${h.range} · 이동 ${h.speed}<br>스킬: ${SKILL_DESC[h.skill.type] || ''} (재사용 ${h.skill.cd}초)${unlocked ? '' : `<br>🔒 해금 ${h.cost} 엠버`}`;
+  const sb = $('dsel'); sb.textContent = !unlocked ? `해금 (${h.cost} 엠버)` : selected.includes(h.id) ? '파티에서 빼기' : '파티에 넣기';
+  sb.onclick = () => { toggleHero(h); $('detail').classList.add('hidden'); if (pv) pv.stop = true; };
+  $('dclose').onclick = () => { $('detail').classList.add('hidden'); if (pv) pv.stop = true; };
+  if (!pv) { const r = new THREE.WebGLRenderer({ canvas: $('pv'), antialias: true, alpha: true }); r.outputColorSpace = THREE.SRGBColorSpace; const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xffffff, 0x445066, 2.2)); const dl = new THREE.DirectionalLight(0xffffff, 1.6); dl.position.set(2, 4, 3); sc.add(dl); const cam = new THREE.PerspectiveCamera(32, 260 / 320, .1, 50); cam.position.set(0, 1.25, 5.2); cam.lookAt(0, .9, 0); pv = { r, sc, cam, clock: new THREE.Clock(), inst: null, t: 0 }; r.setSize(260, 320, false); }
+  pv.stop = false; if (pv.inst) { pv.sc.remove(pv.inst.wrap); pv.inst = null; }
+  const gltf = await loadModel(h.file); if (pv.stop) return;
+  const inst = makeInstance(gltf, 1.75, 'y', 0); pv.sc.add(inst.wrap); pv.inst = inst; pv.t = 0; pv.clipList = ['Idle', ...h.anim.map(n => ({ melee: 'Sword_Slash', gun: 'Gun_Shoot', punch: 'Punch_Left', kick: 'Kick_Right', cast: 'Interact', wave: 'Wave' }[n]))];
+  pv.ci = -1; const loop = () => { if (pv.stop || pv.inst !== inst) return; requestAnimationFrame(loop); const dt = Math.min(pv.clock.getDelta(), .05); pv.t += dt; if (pv.t > (pv.ci <= 0 ? 2.2 : 1.6) || pv.ci < 0) { pv.t = 0; pv.ci = (pv.ci + 1) % pv.clipList.length; play(inst, findClip(inst.clips, new RegExp(pv.pclip = pv.clipList[pv.ci] + '$')), { loop: pv.ci === 0, fade: .12 }); } inst.wrap.rotation.y += dt * .6; inst.mixer.update(dt); pv.r.render(pv.sc, pv.cam); }; loop();
 }
 $('startBtn').onclick = () => { save.party = selected.slice(); persist(); startGame(); };
 $('resetBtn').onclick = () => { if (confirm('저장 데이터를 지울까요?')) { localStorage.removeItem(SAVE_KEY); location.reload(); } };
@@ -202,20 +271,26 @@ addEventListener('keyup', e => keys[e.code] = false);
 
 // ----- waves -----
 function waveComposition(w) {
-  const q = [];
-  const n = 5 + Math.floor(w * 2.2);
+  const q = []; const z = Math.floor((w - 1) / 5);
+  const n = 5 + Math.floor(w * 1.8);
   for (let i = 0; i < n; i++) {
     const r = Math.random(); let k = 'rat';
-    if (w >= 2 && r > .45) k = 'zombie';
-    if (w >= 3 && r > .75) k = 'skeleton';
+    if (z === 0) k = r > .55 ? 'zombie' : 'rat';
+    else if (z === 1) k = r > .66 ? 'skeleton' : r > .33 ? 'zombie' : 'rat';
+    else k = r > .5 ? 'skeleton' : r > .2 ? 'zombie' : 'rat';
+    if (w < 3 && k === 'skeleton') k = 'zombie';
     q.push(k);
   }
-  if (w >= 3 && w % 3 === 0) q.push('lava');
-  if (w % 5 === 0) q.push(['ogre', 'trex', 'mech'][(w / 5 - 1) % 3]);
+  if (w >= 3 && w % 3 === 0 && w % 5 !== 0) q.push('lava');
+  if (w % 5 === 0) {
+    const zi = w / 5 - 1; const set = [['ogre'], ['trex'], ['mech'], ['ogre', 'trex'], ['mech', 'trex', 'ogre']][zi % 5];
+    q.push(...set); if (zi >= 5) q.push(...set);
+  }
   return q;
 }
 async function nextWave() {
   G.wave++; G.waveActive = true;
+  const zi = Math.floor((G.wave - 1) / 5); if (G.zone !== zi) { G.zone = zi; buildWorld(zi); if ((G.wave - 1) % 5 === 0) setTimeout(() => toast(`구역 ${zi % 5 + 1}: ${ZONES[zi % 5].name}`), 1700); }
   G.spawnQ = Q.get('force') ? Q.get('force').split(',') : waveComposition(G.wave);
   const need = [...new Set(G.spawnQ)];
   await Promise.all(need.map(preloadEnemy));
@@ -234,8 +309,15 @@ function spawnEnemy(key) {
 }
 function nearest(list, p, maxd = 1e9) { let b = null, bd = maxd; for (const o of list) { if (o.alive === false) continue; const dd = o.pos.distanceTo(p); if (dd < bd) { bd = dd; b = o; } } return b; }
 function damageEnemy(e, dmg) {
-  if (!e.alive) return; e.hp -= dmg; e.hitFlash = .12;
+  if (!e.alive) return; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg);
   if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb); G.earned += gain; if (e.inst.cur) e.inst.cur.paused = true; }
+}
+const dmgLayer = document.createElement('div'); dmgLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden'; document.body.appendChild(dmgLayer);
+function dmgText(pos, dmg) {
+  if (dmgLayer.childElementCount > 24) return;
+  const v = new THREE.Vector3(pos.x, 2, pos.z).project(camera); const el = document.createElement('div');
+  el.textContent = Math.round(dmg); el.style.cssText = `position:absolute;left:${(v.x + 1) / 2 * innerWidth}px;top:${(1 - v.y) / 2 * innerHeight}px;color:#fff3c0;font:700 13px system-ui;text-shadow:0 1px 3px #000;transition:transform .6s,opacity .6s`;
+  dmgLayer.appendChild(el); requestAnimationFrame(() => { el.style.transform = 'translateY(-26px)'; el.style.opacity = 0; }); setTimeout(() => el.remove(), 650);
 }
 function damageHero(h, dmg) {
   if (!h.alive) return; h.hp -= dmg * G.S.taken;
@@ -292,8 +374,16 @@ function end(win) {
 function offerUpgrade() {
   G.waveActive = false; G.paused = true;
   const pool = [...UPGRADES].sort(() => Math.random() - .5).slice(0, 3);
+  let extra = '';
+  if (G.wave % 5 === 0) {
+    const locked = HEROES.filter(h => !save.unlocked.includes(h.id)).slice(0, 3);
+    locked.forEach(h => save.unlocked.push(h.id)); G.earned += 25; persist();
+    const zn = ZONES[(G.wave / 5 - 1) % 5];
+    extra = `<p style="color:#ffd36b">구역 클리어: ${zn.name}. 엠버 +25${locked.length ? '<br>영웅 해금: ' + locked.map(h => h.name).join(', ') : ''}</p>`;
+    if (G.wave === 25 && !G.won) { G.won = true; extra += '<p style="color:#8fe0ff">등불의 심장을 지켜냈습니다! 계속하면 무한 모드입니다.</p>'; }
+  }
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>웨이브 ${G.wave} 클리어</h1><p>강화를 하나 고르세요</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}</b><br>${u.desc}</button>`).join('');
+  m.innerHTML = `<h1>웨이브 ${G.wave} 클리어</h1>${extra}<p>강화를 하나 고르세요</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}</b><br>${u.desc}</button>`).join('');
   m.querySelectorAll('.opt').forEach(b => b.onclick = () => { pool[+b.dataset.i].apply(G); m.classList.add('hidden'); G.paused = false; nextWave(); });
 }
 
@@ -378,6 +468,8 @@ function update(dt) {
   if (!G.over && living.length === 0 && G.heroes.length) end();
   // lantern glow
   const pulse = .85 + Math.sin(G.t * 3) * .1; lantern.userData.light.intensity = 90 * pulse * (.5 + .5 * Math.max(0, G.lantern) / G.lanternMax);
+  { const c = new THREE.Vector3(); let n = 0; living.forEach(h => { c.add(h.pos); n++; }); if (n) { c.multiplyScalar(.75 / n); camTarget.lerp(c, Math.min(1, dt * 3)); camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1); } }
+  tickEmbers(G.t, dt);
   updateHUD();
 }
 function frame() {
@@ -386,6 +478,7 @@ function frame() {
   if (G && !G.over && !G.paused && $('loading').classList.contains('hidden')) { const n = TS; for (let i = 0; i < n && G && !G.over && !G.paused; i++) update(dt); }
   renderer.render(scene, camera);
 }
+buildWorld(0);
 frame();
 renderMenu();
 window.__dbg = () => G; // dev

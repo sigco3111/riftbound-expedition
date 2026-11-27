@@ -28,12 +28,18 @@
   <h1 id="title">균열 원정대 (Riftbound Expedition)</h1>
   <p class="sub">어둠이 중세, 현대, 우주의 시대를 삼킨 뒤, 마지막 등불 아래 모인 21인의 생존자.</p>
   <div id="meta"></div>
+  <div id="tabs"></div>
   <div id="grid"></div>
-  <div id="preview"></div>
-  <div class="row"><button id="startBtn" disabled>출정 (파티 5인을 고르세요)</button><button id="resetBtn" class="ghost">저장 초기화</button></div>
-  <p class="help">조작: 수동 모드에서 WASD/방향키(모바일은 왼쪽 아래 조이스틱)로 선두를 움직이고, Space로 위임/수동을 바꿉니다. 나머지는 자동 전투입니다.</p>
-  <details><summary>크레딧과 라이선스</summary><div id="credits"></div></details>
+  <details><summary>조작 방법 / 크레딧과 라이선스</summary>
+    <p class="help">수동 모드: WASD/방향키(모바일은 왼쪽 아래 조이스틱)로 선두 영웅을 움직이고, 나머지는 따라오며 자동 전투. Space(또는 상단 버튼)로 위임 모드로 바꾸면 전원이 알아서 싸웁니다.</p>
+    <div id="credits"></div><button id="resetBtn" class="ghost">저장 초기화</button></details>
+  <div id="dock">
+    <div id="slots"></div>
+    <div id="preview"></div>
+    <button id="startBtn" disabled>출정</button>
+  </div>
 </div>
+<div id="detail" class="hidden"><div class="dbox"><canvas id="pv" width="260" height="320"></canvas><div id="dtext"></div><div class="row"><button id="dsel" class="mbtn"></button><button id="dclose" class="ghost">닫기</button></div></div></div>
 <div id="modal" class="panel hidden"></div>
 <div id="loading" class="hidden">불러오는 중…</div>
 <script type="module" src="main.js"></script>

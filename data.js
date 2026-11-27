@@ -59,3 +59,12 @@ export const CREDITS = `
 <p>적: 쥐 Evil Giant Rat (CC0, OpenGameArt), 용암 골렘 Lava Golem (CC0, OpenGameArt), 해골 무법자 Skeleton Outlaw (CC0, OpenGameArt), 오우거/티렉스/메카 anymove (CC0, patch.gg).</p>
 <p>감염자(좀비): Quaternius Animated Zombie, CC BY 3.0, 출처 표기: Quaternius (https://poly.pizza/m/jkrEvQZb8J).</p>
 <p>상세 출처와 라이선스는 저장소의 CREDITS.md 참고.</p>`;
+
+// 5 zones, 5 waves each. mix: 0 wall (medieval), 1 car (modern), 2 pod (space), 3 rift crystal
+export const ZONES = [
+  { name: '폐성 외곽', sub: '중세의 잔해', mix: [0, 0, 0, 1], stone: 0x7a6a58, car: 0x6a3a30, hull: 0x6a7a90, glow: 0xff9b3d, ground: 0xb0a090, fog: 0x1a1a26, skyTop: '#0a0f24', skyBot: '#33283a', hemi: 0xc6c0ff, moon: 0xffe0b8 },
+  { name: '무너진 도심', sub: '현대의 폐허', mix: [1, 1, 1, 0], stone: 0x5a6070, car: 0x3a5a8a, hull: 0x7080a0, glow: 0x4aa3df, ground: 0x9aa4c0, fog: 0x10182a, skyTop: '#070d1f', skyBot: '#1f3050', hemi: 0xa8c4ff, moon: 0xc8dcff },
+  { name: '추락한 정거장', sub: '우주의 파편', mix: [2, 2, 2, 1], stone: 0x56506a, car: 0x4a4a6a, hull: 0x8a90b0, glow: 0xa77be8, ground: 0x9a90c0, fog: 0x140f26, skyTop: '#0a0620', skyBot: '#3a1f5a', hemi: 0xc0a8ff, moon: 0xe0c8ff },
+  { name: '뒤섞인 균열', sub: '세 시대가 겹친 곳', mix: [0, 1, 2, 3, 3], stone: 0x5a4a60, car: 0x5a3a5a, hull: 0x7a6a90, glow: 0xff5ea8, ground: 0xa088a8, fog: 0x1e0c22, skyTop: '#14061c', skyBot: '#582040', hemi: 0xffa8d8, moon: 0xffc8e0 },
+  { name: '등불의 심장', sub: '마지막 등불의 자리', mix: [3, 3, 3, 0, 2], stone: 0x6a5a40, car: 0x6a5030, hull: 0xa09060, glow: 0xffd36b, ground: 0xc0a878, fog: 0x241608, skyTop: '#1a0e04', skyBot: '#6a4018', hemi: 0xffe0a0, moon: 0xfff0c0 },
+];
