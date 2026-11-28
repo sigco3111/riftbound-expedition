@@ -428,6 +428,7 @@ function heroSkill(h) {
 }
 
 function end(win) {
+  if (G.over) return;
   G.over = true; const gain = Math.max(1, Math.floor(Math.pow(Math.max(0, G.maxStage), 1.25) * .75 + G.relics));
   save.embers += gain; save.best = Math.max(save.best || 0, G.maxStage); persist();
   const m = $('modal'); m.classList.remove('hidden');
@@ -474,7 +475,7 @@ function dropLoot(e) {
   }
 }
 // ---------- 은화로 캠프 자동 강화 ----------
-const CAMP = [['whet', '숫돌', '공격력', 8, 45, 1], ['dress', '붕대', '체력', 8, 45, 1.05], ['oil', '램프유', '스킬 재사용 단축', 6, 60, 1.5], ['tonic', '탕약', '탕약 개수와 회복량', 1, 70, 1.7]];
+const CAMP = [['whet', '숫돌', '공격력', 8, 45, 1], ['dress', '붕대', '체력', 8, 45, 1.05], ['tonic', '탕약', '탕약 개수와 회복량', 1, 70, 1.7]];
 const campCost = id => { const c = CAMP.find(x => x[0] === id); return Math.round(c[4] * Math.pow(1.42, G.camp[id])); };
 function buyCamp(id) {
   const c = CAMP.find(x => x[0] === id), n = G.camp[id]; G.earned -= campCost(id); G.camp[id]++;
