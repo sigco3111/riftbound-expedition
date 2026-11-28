@@ -550,7 +550,7 @@ let hubOpen = false;
 function campHint() { const b = $('campBtn'); if (b) { b.classList.add('ready'); b.textContent = '정비 ●'; } toast('정비 가능 (우상단 정비 버튼)'); }
 function openHub(onBack) {
   if (!G || G.over || hubOpen) return; const was = G.paused; if (!onBack && was) return;
-  hubOpen = true; G.paused = true; const m = $('modal'); m.classList.remove('hidden'); let tab = -1, pv = null, sellArm = -1;
+  hubOpen = true; G.paused = true; const m = $('modal'); m.classList.remove('hidden'); let tab = -1, pv = null, sellArm = -1, bagSlot = 'all', bagMore = 40;
   const gearTxt = it => it ? `${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}` : '없음';
   const close = () => { hubOpen = false; $('campBtn').classList.remove('ready'); $('campBtn').textContent = '정비'; if (onBack) onBack(); else { m.classList.add('hidden'); G.paused = false; } };
   const render = () => {
@@ -565,14 +565,16 @@ function openHub(onBack) {
       body = `<p><b>${h.def.name}</b> · 체력 ${Math.round(h.maxhp)} · 공격 배율 ${(h.mul || 1).toFixed(2)}</p>` +
         ['atk', 'hp', 'sk'].map(k => `<button class="opt" data-tr="${k}" ${G.earned < trainCost(h, k) || (k === 'sk' && !skTrainable(h)) ? 'disabled' : ''}><b>${k === 'atk' ? '공격 훈련' : k === 'hp' ? '체력 훈련' : '스킬 수련'}</b> Lv ${(h.tr || {})[k] | 0} · ${k === 'atk' ? '기본 공격력 +6%' : k === 'hp' ? '체력 +6%' : (SKILL_DESC[h.def.skill.type] || '스킬').split(':')[0] + ': ' + (SK_TRAIN[h.def.skill.type] || '스킬 위력 +8%')}<br>비용 ${trainCost(h, k)} 은화</button>`).join('') +
         `<p style="font-size:13px">장착: ${SLOTS.map(sl => sl[1] + ' ' + gearTxt(g[sl[0]])).join(' / ')}</p>` +
-        (() => { const L = (G.bag || []).map((it, bi) => ({ it, bi })).sort((a, b) => b.it.pow - a.it.pow), shown = L.slice(0, 40); return `<p style="font-size:13px">가방 ${L.length}개 (판매는 두 번 눌러야 확정됩니다)</p>` + shown.map(x => `<div class="bagrow"><span><b>${gearTxt(x.it)}</b><br>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍' : ''} · 현재 ${h.def.name}의 ${gearTxt(g[x.it.slot])}</span><button class="opt" style="width:auto" data-eq="${x.bi}">${h.def.name}에게 장착</button><button class="ghost${sellArm === x.bi ? ' warn' : ''}" data-sell="${x.bi}">${sellArm === x.bi ? '정말 판매? ' : '판매 '}${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('') + (L.length > shown.length ? `<p style="font-size:12px">나머지 ${L.length - shown.length}개는 위력이 낮은 순으로 숨김(판매하지 않고 보관됨)</p>` : ''); })();
+        (() => { const all = G.bag || [], L = all.map((it, bi) => ({ it, bi })).filter(x => bagSlot === 'all' || x.it.slot === bagSlot).sort((a, b) => b.it.pow - a.it.pow), shown = L.slice(0, bagMore); return `<p style="font-size:13px">가방 ${all.length}개 (판매는 두 번 눌러야 확정됩니다)</p><div>${[['all', '전체'], ...SLOTS.map(x => [x[0], x[1]])].map(f => `<button class="ghost${bagSlot === f[0] ? ' warn2' : ''}" data-f="${f[0]}">${f[1]}</button>`).join(' ')}</div>` + shown.map(x => `<div class="bagrow"><span><b>${gearTxt(x.it)}</b><br>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍' : ''} · 현재 ${h.def.name}의 ${gearTxt(g[x.it.slot])}</span><button class="opt" style="width:auto" data-eq="${x.bi}">${h.def.name}에게 장착</button><button class="ghost${sellArm === x.bi ? ' warn' : ''}" data-sell="${x.bi}">${sellArm === x.bi ? '정말 판매? ' : '판매 '}${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('') + (L.length > shown.length ? `<button class="ghost" data-more="1">더 보기 (${L.length - shown.length}개 남음)</button>` : ''); })();
     }
-    m.innerHTML = `<h1>정비</h1><p>은화 <b>${Math.round(G.earned)}</b> · 열려 있는 동안 전투는 멈춰 있습니다</p><div>${tabs}</div>${body}<br><button class="mbtn" id="hubClose">닫고 계속</button>`;
+    m.innerHTML = `<h1>정비</h1><p>은화 <b>${Math.round(G.earned)}</b> · 열려 있는 동안 전투는 멈춰 있습니다</p><div>${tabs}</div>${body}<div class="hubfoot"><button class="mbtn" id="hubClose">닫고 계속</button></div>`;
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; sellArm = -1; render(); });
     m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { buyCamp(b.dataset.c); render(); });
     m.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { train(G.heroes[tab], b.dataset.tr); render(); });
     m.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { const h = G.heroes[tab], it = G.bag[+b.dataset.eq]; G.bag.splice(+b.dataset.eq, 1); h.gear = h.gear || {}; const cur = h.gear[it.slot]; if (cur) { cur.hi = tab; G.bag.push(cur); } delete it.hi; h.gear[it.slot] = it; recalcHero(h); render(); });
     m.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => { const bi = +b.dataset.sell, it = G.bag[bi]; if (!it) return; if (sellArm !== bi) { sellArm = bi; render(); return; } sellArm = -1; G.earned += Math.round(it.pow * .6 * (G.silverMul || 1)); G.bag.splice(+b.dataset.sell, 1); render(); });
+    m.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { bagSlot = b.dataset.f; bagMore = 40; render(); });
+    const mo = m.querySelector('[data-more]'); if (mo) mo.onclick = () => { bagMore += 40; render(); };
     const rc = m.querySelector('[data-rec]'); if (rc) rc.onclick = () => { autoCamp(); render(); };
     const ac = $('acBtn'); if (ac) ac.onclick = () => { save.autoCamp = !save.autoCamp; persist(); render(); };
     $('hubClose').onclick = close;
