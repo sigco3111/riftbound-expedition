@@ -401,7 +401,7 @@ function fireFlare() {
   const dmg = G.heroes.reduce((a, h) => a + ((h.def.dmg || 0) * G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.S.dmg), 0) * 1.5 * pf;
   G.enemies.forEach(e => { if (e.alive && Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < r) damageEnemy(e, dmg); });
   G.heroes.forEach(h => { if (h.alive) h.hp = Math.min(h.maxhp, h.hp + h.maxhp * .1); });
-  ring(c.pos, r, 0xffb860, .7); try { fxPlay('light', c.pos, Math.max(1, r / 8)); fxPlay('sonic', c.pos, r / 6); } catch (e) { } toast('등불 플레어!'); return true;
+  ring(c.pos, r, 0xffb860, .7); try { fxPlay('light', c.pos, Math.min(.8, Math.max(.5, r / 14))); } catch (e) { } toast('등불 플레어!'); return true;
 }
 function damageEnemy(e, dmg, noLight) {
   if (!e.alive) return; if (!noLight && inLight(e.pos)) dmg *= 1 + .02 * G.camp.oil + .04; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg); try { fxHit(e, dmg); } catch (er) { }
