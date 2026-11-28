@@ -438,7 +438,7 @@ function rollGear() {
   (G.gear = G.gear || []).push(`${g[0]} ${k[0]}`);
   return `<p style="color:${g[2]}">전리품: ${g[0]} ${k[0]} (${k[1]} +${Math.round((k[0] === '방어구' ? .04 : k[0] === '무기' ? .03 : .025) * g[1] * 100)}%)</p>`;
 }
-const xpNeed = L => Math.round(20 * Math.pow(1.4, L - 1) + 7 * (L - 1));
+const xpNeed = L => Math.round(26 * Math.pow(1.4, L - 1) + 8 * (L - 1));
 function addXp(x) { G.xp += x; let n = xpNeed(G.level); while (G.xp >= n) { G.xp -= n; G.level++; G.pendingCards++; toast(`레벨 ${G.level}`); n = xpNeed(G.level); } }
 // 레벨업 카드: 파티 공용 + 편성에 있는 역할별 카드. 같은 카드는 3번까지 중첩.
 function cardPool() {
@@ -479,7 +479,7 @@ function offerUpgrade() {
   const dg = danger(true), rec = stewardPush();
   const m = $('modal'); m.classList.remove('hidden');
   m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>다음 구간 위험도: <b style="color:${dg[2]}">${dg[0]}</b> · 레벨 ${G.level}</p><button class="opt" data-go="1"><b>전진${rec ? ' (추천)' : ''}</b><br>다음 스테이지로 나아갑니다</button><button class="opt" data-go="0"><b>같은 구간 반복${rec ? '' : ' (추천)'}</b><br>경험치·엠버 80%, 장비와 경험치를 더 모읍니다</button><p id="cd" style="opacity:.7;font-size:12px"></p>`;
-  let done = false, t = 10; const cd = m.querySelector('#cd');
+  let done = false, t = 7; const cd = m.querySelector('#cd');
   const go = push => { if (done) return; done = true; clearInterval(iv); m.classList.add('hidden'); G.paused = false; if (push) { G.holdCount = 0; nextWave(); } else { G.holdCount++; G.state = 'init'; beginStage(); } };
   const iv = setInterval(() => { t--; if (cd) cd.textContent = `${t}초 뒤 추천 선택으로 진행`; if (t <= 0) go(rec); }, 1000);
   m.querySelectorAll('.opt').forEach(b => b.onclick = () => go(b.dataset.go === '1'));
