@@ -254,39 +254,39 @@ async function openDetail(h) {
 }
 // ---------- story scenes (staged in the real game scene; own dialogue) ----------
 const STORY = {
-  // who: 영웅 id(없으면 파티 첫 영웅이 대신 말함), null: 나레이션. 모든 대사는 자체 작성.
+  // who: 영웅 id, null: 나레이션. 해당 영웅이 파티에 없으면 그 대사는 alt(중립 나레이션)로 바꾸고, alt가 없으면 생략한다(다른 영웅이 대신 말하지 않음). 모든 대사는 자체 작성.
   intro: [
     { who: null, t: '세 시대가 한 하늘 아래 겹친 밤. 갈라진 하늘 틈, 균열에서 쏟아진 어둠이 모든 불빛을 삼키고 있었다.' },
-    { who: 'w_medieval', t: '마지막 등불이 아직 켜져 있다. 이 불이 꺼지면 돌아갈 길도 같이 사라진다.' },
+    { who: 'w_medieval', t: '마지막 등불이 아직 켜져 있다. 이 불이 꺼지면 돌아갈 길도 같이 사라진다.', alt: '마지막 등불이 아직 켜져 있었다. 이 불이 꺼지면 돌아갈 길도 같이 사라질 것이다.' },
     { who: 'm_farmer', t: '성벽이 있던 자리에 철골이 서 있고, 그 위로 별이 부서지고 있어요. 대체 몇 개의 세계가 섞인 거죠?' },
-    { who: 'w_soldier', t: '균열의 가장자리는 세 가지 빛깔로 울고 있어. 전부 따라가 보면 중심에 닿을 거야.' },
-    { who: 'm_king', t: '재가 된 왕국의 왕으로서 명한다. 등불을 지켜라. 그리고 균열의 끝까지 가자.' },
+    { who: 'w_soldier', t: '균열의 가장자리는 세 가지 빛깔로 울고 있어. 전부 따라가 보면 중심에 닿을 거야.', alt: '균열의 가장자리가 세 가지 빛깔로 울고 있었다. 따라가 보면 중심에 닿을 것 같았다.' },
+    { who: 'm_king', t: '재가 된 왕국의 왕으로서 명한다. 등불을 지켜라. 그리고 균열의 끝까지 가자.', alt: '누군가 말했다. 등불을 지키고, 균열의 끝까지 가자고.' },
   ],
   // 장면 전환: 보스 등장 전, 첫 길목 등불을 밝힌 뒤. 각 장면은 한 번만 나온다(save.story[key]).
   boss_ogre_pre: [
     { who: null, t: '길 한가운데, 균열에서 떨어진 거인이 돌 같은 어깨를 들썩이며 일어섰다.' },
-    { who: 'w_medieval', t: '균열에서 떨어진 놈이군. 등불 앞에서 물러서면 이 길은 여기서 끝이다.' },
-    { who: 'w_soldier', t: '머리부터 노릴게요. 앞은 부탁해요.' },
+    { who: 'w_medieval', t: '균열에서 떨어진 놈이군. 등불 앞에서 물러서면 이 길은 여기서 끝이다.', alt: '등불 앞에서 물러서면 이 길은 여기서 끝난다. 모두가 그것을 알았다.' },
+    { who: 'w_soldier', t: '머리부터 노릴게. 앞은 부탁해.' },
   ],
   boss_ogre_post: [
     { who: null, t: '거인이 쓰러진 자리에서 재가 흩어지고, 길목의 등불이 조용히 다시 불을 받았다.' },
     { who: 'm_farmer', t: '불이 따뜻해졌어요. 다들 상처를 보여 주세요, 이번엔 제대로 감아 드릴게요.' },
-    { who: 'm_king', t: '쉬는 건 이 불이 켜져 있는 동안뿐이다. 날이 밝기 전에 다음 길목까지 간다.' },
+    { who: 'm_king', t: '쉬는 건 이 불이 켜져 있는 동안뿐이다. 날이 밝기 전에 다음 길목까지 간다.', alt: '쉴 수 있는 건 이 불이 켜져 있는 동안뿐이었다. 날이 밝기 전에 다음 길목까지 가야 했다.' },
   ],
   boss_trex_pre: [
     { who: null, t: '땅이 울렸다. 어느 먼 시대의 심연에서 올라온 이빨이 어둠 속에서 번뜩였다.' },
     { who: 'w_witch', t: '저건 이쪽 세계 것이 아니야. 균열이 아주 먼 시대의 심연까지 끌어당기고 있어.' },
-    { who: 'w_medieval', t: '무엇이든 불빛 앞에서는 똑같다. 간다.' },
+    { who: 'w_medieval', t: '무엇이든 불빛 앞에서는 똑같다. 간다.', alt: '무엇이든 불빛 앞에서는 똑같았다. 일행은 앞으로 나섰다.' },
   ],
   boss_mech_pre: [
     { who: null, t: '무너진 철골 사이에서 폐허의 기계가 눈을 떴다. 오래 꺼져 있던 붉은 빛이 다시 들어왔다.' },
-    { who: 'w_soldier', t: '아직 움직이다니. 이 균열은 시대를 가리지 않는군요.' },
-    { who: 'm_king', t: '쇠로 된 적이라도 등불은 꺼뜨리지 못한다. 진형을 유지하라.' },
+    { who: 'w_soldier', t: '아직 움직이다니. 이 균열은 시대를 가리지 않는군.' },
+    { who: 'm_king', t: '쇠로 된 적이라도 등불은 꺼뜨리지 못한다. 진형을 유지하라.', alt: '쇠로 된 적이라도 등불은 꺼뜨리지 못한다. 일행은 진형을 유지했다.' },
   ],
   boss_mech_post: [
     { who: null, t: '붉은 빛이 꺼지고, 철골 사이로 바람이 지나갔다. 균열은 아직 닫히지 않았다. 등불이 한 뼘 더 먼 곳을 비추었다.' },
-    { who: 'm_king', t: '여기까지가 첫 길이다. 균열은 더 깊은 곳으로 이어진다. 다음 원정을 준비하라.' },
-    { who: 'w_medieval', t: '등불이 남아 있는 한, 길도 남아 있습니다. 다시 나서죠.' },
+    { who: 'm_king', t: '여기까지가 첫 길이다. 균열은 더 깊은 곳으로 이어진다. 다음 원정을 준비하라.', alt: '여기까지가 첫 길이었다. 균열은 더 깊은 곳으로 이어지고 있었다. 일행은 다음 원정을 준비했다.' },
+    { who: 'w_medieval', t: '등불이 남아 있는 한 길도 남아 있다. 다시 나서자.', alt: '등불이 남아 있는 한, 길도 남아 있었다.' },
   ],
 };
 let CINE = null;
@@ -309,8 +309,9 @@ function cineEnd() {
   document.body.classList.remove('cine'); camera.fov = PORT ? 58 : 42; camera.updateProjectionMatrix();
 }
 function showStory(key, done) {
-  const lines = STORY[key]; let i = 0;
   const party = G.heroes.map(h => h.def);
+  // 해당 영웅이 파티에 없으면 중립 나레이션(alt)으로 바꾸고, alt가 없으면 생략. 다른 영웅이 대신 말하지 않는다.
+  const lines = STORY[key].map(l => (!l.who || party.some(p => p.id === l.who)) ? l : (l.alt ? { who: null, t: l.alt } : null)).filter(Boolean); let i = 0;
   const beat = key !== 'intro';   // 장면 전환(보스 전후): 3D 연출 없이 게임 화면 위에 대사만. 일러스트 파일은 요청하지 않는다.
   const el = document.createElement('div'); el.id = 'story'; if (beat) el.className = 'beat';
   el.innerHTML = `<div class="vig"></div><button class="skip" id="stSkip">건너뛰기</button><div class="dlg" id="stDlg"></div>`;
@@ -319,10 +320,11 @@ function showStory(key, done) {
   let ended = false;
   const end = () => { if (ended) return; ended = true; el.classList.add('out'); setTimeout(() => el.remove(), 350); cineEnd(); done(); };
   const draw = () => {
-    const l = lines[i], d = $('stDlg'), h = l.who ? (party.find(p => p.id === l.who) || party[0]) : null;
+    const l = lines[i], d = $('stDlg'), h = l.who ? party.find(p => p.id === l.who) : null;
     d.innerHTML = `${h ? ptHtml(h.id, 'lg') : '<span class="pt lg nar">◈</span>'}<div class="tx"><b class="${h ? '' : 'nar'}" ${h ? `style="color:${ERA[h.era].color}"` : ''}>${h ? h.name : '나레이션'}</b><p>${l.t}</p></div><span class="nx">${i + 1} / ${lines.length} · 클릭하여 계속</span>`;
     d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
   };
+  if (!lines.length) { end(); return; }
   el.onclick = e => { if (e.target.id === 'stSkip') return end(); if (++i >= lines.length) end(); else draw(); };
   draw();
 }
