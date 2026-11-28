@@ -401,7 +401,7 @@ function fireFlare() {
   const dmg = G.heroes.reduce((a, h) => a + ((h.def.dmg || 0) * G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.S.dmg), 0) * 1.5 * pf;
   G.enemies.forEach(e => { if (e.alive && Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < r) damageEnemy(e, dmg); });
   G.heroes.forEach(h => { if (h.alive) h.hp = Math.min(h.maxhp, h.hp + h.maxhp * .1); });
-  ring(c.pos, r, 0xffb860, .7); try { fxPlay('herald', c.pos, Math.max(1, r / 8)); fxPlay('sonic', c.pos, r / 6); } catch (e) { } toast('등불 플레어!'); return true;
+  ring(c.pos, r, 0xffb860, .7); try { fxPlay('light', c.pos, Math.max(1, r / 8)); fxPlay('sonic', c.pos, r / 6); } catch (e) { } toast('등불 플레어!'); return true;
 }
 function damageEnemy(e, dmg, noLight) {
   if (!e.alive) return; if (!noLight && inLight(e.pos)) dmg *= 1 + .02 * G.camp.oil + .04; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg); try { fxHit(e, dmg); } catch (er) { }
@@ -728,7 +728,7 @@ function update(dt) {
 const FX = { ctx: null, fx: {}, ok: false, lastHit: 0, lastCast: {} };
 const FX_LIST = { // id: [file, load scale]
   meteor: ['nextsoft/MagicMeteo', .5], thunder: ['nextsoft/MagicThunder', .5], cold: ['nextsoft/MagicCold', .5], tornado: ['nextsoft/MagicTornade', .5], heal: ['nextsoft/MagicHeal2', .5], powerup: ['nextsoft/PowerUp', .5], slash: ['nextsoft/Sword2', .5],
-  fireball: ['pierre-2/FireBall', .5], ember: ['pierre-2/Sword_Ember', .5], flame: ['pierre-1/Flame', .5], herald: ['pierre-1/Herald', .5], sonic: ['pierre-1/SonicBoom', .5], bolt: ['pierre-1/LightningStrike', .5],
+  light: ['tktk/Light', .5], fireball: ['pierre-2/FireBall', .5], ember: ['pierre-2/Sword_Ember', .5], flame: ['pierre-1/Flame', .5], herald: ['pierre-1/Herald', .5], sonic: ['pierre-1/SonicBoom', .5], bolt: ['pierre-1/LightningStrike', .5],
   hit: ['tktk/ToonHit', .4], hit2: ['andrewfm/hit_eff', .4], barrier: ['effekseer-1.6/Barrior01', .5], aura: ['effekseer-1.6/Aura01', .5]
 };
 async function initFx() {
