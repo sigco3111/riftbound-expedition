@@ -24,7 +24,9 @@ html,body{margin:0;height:100%;background:#0b0f1a;color:#e8ecf5;font-family:syst
 #knob{position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:#ffffff55}
 #toast{position:absolute;left:0;right:0;top:40%;text-align:center;font-size:26px;font-weight:800;color:#ffd36b;text-shadow:0 2px 8px #000;opacity:0;transition:opacity .4s}
 .panel{position:fixed;inset:0;overflow:auto;background:#0b0f1af2;padding:16px;display:flex;flex-direction:column;align-items:center}
-#modal{background:#0b0f1ad9;justify-content:center}
+#modal{background:#0b0f1ad9;justify-content:flex-start}
+#modal>:first-child{margin-top:auto}
+#modal>:last-child{margin-bottom:auto}
 h1{margin:6px 0;font-size:30px;color:#ffd36b;letter-spacing:1px}
 .sub{color:#aab4cf;margin:0 0 8px;text-align:center;font-size:14px}
 #meta{font-size:13px;margin:4px 0;color:#ffd36b}
@@ -67,3 +69,7 @@ details{font-size:11px;color:#8e98b5;max-width:700px;margin-top:6px}
 
 #top{flex-wrap:wrap;row-gap:4px}
 @media (max-width:700px){#lanternBar{order:5;flex:1 1 100%}#waveBox{order:1}#infoBox{order:2;flex:1;text-align:right}#modeBtn{order:3}#synergy{top:70px;max-width:92%}#bossBar{top:96px;left:8%;right:8%}}
+
+#speedBtn,#contBtn{background:#27314b;color:#ffd36b;border:1px solid #4a5780;border-radius:8px;padding:6px 10px;font-size:13px}
+#contBtn{font-size:15px;padding:10px 14px;margin-right:8px}
+#contBtn.hidden{display:none}

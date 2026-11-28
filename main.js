@@ -14,6 +14,8 @@ const SAVE_KEY = 'riftbound.v1';
 let save = { embers: 30, unlocked: ['w_medieval', 'm_king', 'w_soldier', 'w_witch', 'm_farmer', 'w_punk'], party: [], best: 0 };
 try { Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) {}
 save.boons = save.boons || {};
+if (![1, 2, 4].includes(save.speed)) save.speed = 1;
+if (save.autoRetry == null) save.autoRetry = true;
 if (Q.get('unlock')) save.unlocked = HEROES.map(h => h.id);
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} };
 
@@ -182,6 +184,7 @@ function computeSynergy(ids) {
 const SKILL_DESC = { barrier: '등불 방벽: 파티 전체가 잠시 피해를 줄이는 방벽', heal: '치유: 파티와 등불을 회복', aoe: '범위 마법: 적 무리에 광역 피해와 감속', pull: '중력장: 적을 끌어당기고 늦춤', turret: '포탑 설치: 일정 시간 자동 사격', trap: '함정 설치: 밟으면 폭발하며 감속', volley: '연속 사격: 여러 발을 연달아 발사', dash: '돌진 타격: 적에게 뛰어들어 범위 피해', aura: '지휘 오라: 파티 공격 속도 +25% (5초)', gold: '보급' };
 let eraTab = 'all';
 function renderMenu() {
+  $('contBtn').classList.toggle('hidden', !save.run); if (save.run) $('contBtn').textContent = `이어하기 (스테이지 ${save.run.wave} · Lv${save.run.level})`;
   $('meta').textContent = `보유 엠버 ${save.embers} · 최고 스테이지 ${save.best} · 해금 ${save.unlocked.length}/21`;
   const tabs = $('tabs'); tabs.innerHTML = '';
   [['all', '전체'], ['medieval', '중세'], ['modern', '현대'], ['space', '우주']].forEach(([k, n]) => { const b = document.createElement('button'); b.className = 'tab' + (eraTab === k ? ' on' : ''); b.textContent = n; b.onclick = () => { eraTab = k; renderMenu(); }; tabs.appendChild(b); });
@@ -224,7 +227,8 @@ async function openDetail(h) {
   const inst = makeInstance(gltf, 1.75, 'y', 0); pv.sc.add(inst.wrap); pv.inst = inst; pv.t = 0; pv.clipList = ['Idle', ...h.anim.map(n => ({ melee: 'Sword_Slash', gun: 'Gun_Shoot', punch: 'Punch_Left', kick: 'Kick_Right', cast: 'Interact', wave: 'Wave' }[n]))];
   pv.ci = -1; const loop = () => { if (pv.stop || pv.inst !== inst) return; requestAnimationFrame(loop); const dt = Math.min(pv.clock.getDelta(), .05); pv.t += dt; if (pv.t > (pv.ci <= 0 ? 2.2 : 1.6) || pv.ci < 0) { pv.t = 0; pv.ci = (pv.ci + 1) % pv.clipList.length; play(inst, findClip(inst.clips, new RegExp(pv.pclip = pv.clipList[pv.ci] + '$')), { loop: pv.ci === 0, fade: .12 }); } inst.wrap.rotation.y += dt * .6; inst.mixer.update(dt); pv.r.render(pv.sc, pv.cam); }; loop();
 }
-$('startBtn').onclick = () => { save.party = selected.slice(); persist(); startGame(); };
+$('startBtn').onclick = () => { if (save.run && !confirm(`진행 중인 원정(스테이지 ${save.run.wave})이 있습니다. 새로 시작하면 사라집니다. 계속할까요?`)) return; save.party = selected.slice(); persist(); startGame(); };
+$('contBtn').onclick = () => { if (save.run) startGame(true); };
 $('resetBtn').onclick = () => { if (confirm('저장 데이터를 지울까요?')) { localStorage.removeItem(SAVE_KEY); location.reload(); } };
 
 // ---------- game ----------
@@ -233,9 +237,11 @@ async function preloadEnemy(key) {
   const d = ENEMIES[key]; if (!d) return;
   if (!d.gltf) d.gltf = await loadModel(d.file);
 }
-async function startGame() {
+async function startGame(resume) {
+  const R = resume ? save.run : null; if (!R) save.run = null;
   $('loading').classList.remove('hidden');
   if (G) cleanup();
+  if (R) selected = R.party.filter(id => heroById[id]);
   const S = computeSynergy(selected);
   G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, camp: { whet: 0, dress: 0, oil: 0, tonic: 0 }, tonics: 2, loot: [], relics: 0, maxStage: 0, silverMul: 1, xp: 0, level: 1, pendingCards: 0, cardStack: {}, holdCount: 0, st: { downs: 0, minHp: 1, t: 0 }, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null };
   for (let i = 0; i < selected.length; i++) {
@@ -255,6 +261,7 @@ async function startGame() {
   { const k = 1 + .06 * boonLv('hp'); G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
   const startWave = parseInt(Q.get('wave') || '0', 10) || (1 + Math.min(boonLv('start'), Math.max(0, (save.best || 0) - 3)));
   G.wave = Math.max(1, startWave); G.maxStage = G.wave - 1;
+  if (R) { restoreRun(R); toast(`이어하기: 스테이지 ${G.wave}`); }
   beginStage();
 }
 function cleanup() {
@@ -280,6 +287,8 @@ function updateHUD() {
   if (G.boss && G.boss.alive) { $('bossBar').classList.remove('hidden'); $('bossName').textContent = G.boss.def.name; $('bossFill').style.width = Math.max(0, G.boss.hp / G.boss.maxhp * 100) + '%'; } else $('bossBar').classList.add('hidden');
 }
 $('modeBtn').onclick = () => { manual = !manual; };
+$('speedBtn').onclick = () => { save.speed = save.speed === 1 ? 2 : save.speed === 2 ? 4 : 1; persist(); $('speedBtn').textContent = save.speed + '배속'; };
+$('speedBtn').textContent = save.speed + '배속';
 addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') { manual = !manual; e.preventDefault(); } });
 addEventListener('keyup', e => keys[e.code] = false);
 { // touch stick
@@ -321,6 +330,7 @@ async function beginStage() {
   G.heroes.forEach(h => { if (!h.alive) { h.alive = true; h.hp = h.maxhp * .6; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); } });
   G.state = 'walk'; G.nextW = G.W + 8; G.stT = 0;
   toast(`스테이지 ${G.wave}`);
+  snapshotRun();
   updateHUD();
 }
 function advance(dt) {
@@ -429,17 +439,20 @@ function heroSkill(h) {
 
 function end(win) {
   if (G.over) return;
-  G.over = true; const gain = Math.max(1, Math.floor(Math.pow(Math.max(0, G.maxStage), 1.25) * .75 + G.relics));
+  G.over = true; save.run = null; const gain = Math.max(1, Math.floor(Math.pow(Math.max(0, G.maxStage), 1.25) * .75 + G.relics));
   save.embers += gain; save.best = Math.max(save.best || 0, G.maxStage); persist();
   const m = $('modal'); m.classList.remove('hidden');
+  let retryStop = null, retryDone = false;
+  const armRetry = () => { if (retryStop) retryStop(); retryStop = countdown(m, 12, () => { if (!retryDone && save.autoRetry && G && G.over) { retryDone = true; startGame(); } }, '자동으로 다시 출정 (화면을 누르면 멈춤)'); };
   const render = () => {
     m.innerHTML = `<h1>등불이 꺼졌습니다</h1><p>도달 스테이지 ${G.maxStage} · 레벨 ${G.level} · 처치 ${G.kills} · 유물 ${G.relics} · 획득 엠버 ${gain}</p><p>보유 엠버 <b>${save.embers}</b> (영구 강화: 다음 런부터 계속 적용)</p>` +
       BOONS.map(b => { const lv = boonLv(b[0]), mx = lv >= b[4]; return `<button class="opt" data-b="${b[0]}" ${mx || save.embers < boonCost(b[0]) ? 'disabled' : ''}><b>${b[1]}</b> ${lv}/${b[4]}<br>${b[2]} · ${mx ? '최대' : '비용 ' + boonCost(b[0])}</button>`; }).join('') +
-      '<br><button class="mbtn" id="again">다시 출정</button><br><button class="ghost" id="tomenu">영웅 선택으로</button>';
+      '<br><button class="mbtn" id="again">다시 출정</button><br><button class="ghost" id="arBtn"></button> <button class="ghost" id="tomenu">영웅 선택으로</button><p id="cd" style="opacity:.7;font-size:12px"></p>';
+    const ar = $('arBtn'); ar.textContent = '자동 재도전: ' + (save.autoRetry ? '켜짐' : '꺼짐'); ar.onclick = e => { e.stopPropagation(); save.autoRetry = !save.autoRetry; persist(); render(); if (save.autoRetry) armRetry(); else if (retryStop) retryStop(); };
     m.querySelectorAll('[data-b]').forEach(el => el.onclick = () => { const id = el.dataset.b, c = boonCost(id); if (save.embers >= c && boonLv(id) < BOONS.find(x => x[0] === id)[4]) { save.embers -= c; save.boons[id] = boonLv(id) + 1; persist(); render(); } });
-    $('again').onclick = () => startGame(); $('tomenu').onclick = () => { m.classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden'); cleanup(); renderMenu(); };
+    $('again').onclick = () => { if (retryStop) retryStop(); startGame(); }; $('tomenu').onclick = () => { m.classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden'); cleanup(); renderMenu(); };
   };
-  render();
+  render(); if (save.autoRetry) armRetry();
 }
 // ---------- 영웅별 장비 (무기/방어구/장신구, 4등급, 유물은 특수 효과) ----------
 const GRADES = [['낡은', 1, '#a8a290'], ['단련된', 1.45, '#7fb4d6'], ['도금된', 2, '#e0a33c'], ['유물', 2.9, '#ff7a3a']];
@@ -547,7 +560,6 @@ function offerUpgrade() {
     locked.forEach(h => save.unlocked.push(h.id)); persist();
     const zn = ZONES[(G.wave / 5 - 1) % 5];
     extra += `<p style="color:#ffd36b">구역 클리어: ${zn.name}.${locked.length ? '<br>영웅 해금: ' + locked.map(h => h.name).join(', ') : ''}</p>`;
-    if (G.wave === 25 && !G.won) { G.won = true; extra += '<p style="color:#8fe0ff">등불의 심장을 지켜냈습니다! 계속하면 무한 모드입니다.</p>'; }
   }
   const dg = danger(true), rec = stewardPush();
   const m = $('modal'); m.classList.remove('hidden');
@@ -558,6 +570,25 @@ function offerUpgrade() {
   m.querySelectorAll('.opt').forEach(b => b.onclick = () => go(b.dataset.go === '1'));
 }
 
+// ---------- 저장 / 이어하기 (스테이지 시작 시점 스냅샷, 체력은 가득 채워 복원) ----------
+function snapshotRun() {
+  if (!G || G.over || !G.heroes.length) return;
+  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, gear: G.heroes.map(h => h.gear || {}) };
+  persist();
+}
+function restoreRun(R) {
+  G.wave = Math.max(1, R.wave | 0); G.maxStage = R.maxStage | 0; G.level = R.level || 1; G.xp = R.xp || 0; G.earned = R.earned || 0;
+  G.flames = R.flames || 1; G.tonics = R.tonics || 0; G.relics = R.relics || 0; G.kills = R.kills || 0; G.holdCount = R.holdCount || 0; G.pendingCards = R.pendingCards || 0;
+  G.camp = { whet: 0, dress: 0, oil: 0, tonic: 0, ...R.camp };
+  G.bonus.atk *= 1 + .08 * G.camp.whet;
+  { const k = 1 + .08 * G.camp.dress; G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
+  G.heroes.forEach((h, i) => { h.gear = R.gear[i] || {}; recalcHero(h); });
+  G.cardStack = {};
+  const pool = cardPool();
+  for (const id in R.cardStack) { const c = pool.find(x => x.id === id); if (c) for (let n = 0; n < R.cardStack[id]; n++) c.apply(G); }
+  G.cardStack = { ...R.cardStack };
+  G.heroes.forEach(h => h.hp = h.maxhp);
+}
 // ---------- loop ----------
 const TS = Math.max(1, parseInt(Q.get('ts') || '1', 10)); const clock = new THREE.Clock(); const tmp = new THREE.Vector3();
 function faceTo(wrap, dir, dt, rate = 12) { if (dir.lengthSq() < 1e-6) return; const a = Math.atan2(dir.x, dir.z); let d = a - wrap.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); wrap.rotation.y += d * Math.min(1, dt * rate); }
@@ -655,7 +686,7 @@ function update(dt) {
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), .05);
-  if (G && !G.over && !G.paused && $('loading').classList.contains('hidden')) { const n = TS; for (let i = 0; i < n && G && !G.over && !G.paused; i++) update(dt); }
+  if (G && !G.over && !G.paused && $('loading').classList.contains('hidden')) { const n = TS * save.speed; for (let i = 0; i < n && G && !G.over && !G.paused; i++) update(dt); }
   if (composer) composer.render(); else renderer.render(scene, camera);
 }
 buildWorld(0);
