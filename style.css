@@ -147,8 +147,8 @@ summary{cursor:pointer;text-align:center}
 .hubfoot{position:sticky;bottom:0;z-index:5;margin-top:18px;padding:12px 0 calc(12px + env(safe-area-inset-bottom));text-align:center;background:#0a0e16;border-top:1px solid rgba(255,255,255,.08)}
 @media (max-width:700px){
   #top{padding:8px 10px 14px}
-  #lanternBar{order:5;flex:1 1 100%}#waveBox{order:1}#infoBox{order:2;flex:1;text-align:right}
-  #synergy{top:72px;max-width:92%}#bossBar{top:96px;left:8%;right:8%}
+  #lanternBar{order:3;flex:1 1 100%;min-width:0}#waveBox{order:1}#infoBox{order:2;flex:1;text-align:right}#top button{order:4;font-size:11px;padding:5px 8px}
+  #synergy{top:96px;max-width:92%}#bossBar{top:130px;left:8%;right:8%}
   .card{width:62px;padding:5px}
   .hubgrid{grid-template-columns:1fr;gap:12px}
   .rail{flex-direction:row;overflow-x:auto;position:static;padding-bottom:4px}
