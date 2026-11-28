@@ -116,13 +116,21 @@ function tickEmbers(t, dt) { for (let i = 0; i < EN; i++) { const e = emberSeed[
 // lantern
 const lantern = new THREE.Group();
 {
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(.12, .18, 3.2, 8), new THREE.MeshStandardMaterial({ color: 0x2b2b30 }));
-  pole.position.y = 1.6; lantern.add(pole);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(.3, 16, 12), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc766).multiplyScalar(1.7) }));
-  bulb.position.y = 3.5; lantern.add(bulb);
-  const light = new THREE.PointLight(0xffa860, 110, 22, 2); light.position.y = 3.6; light.castShadow = !LOWQ; light.shadow.mapSize.set(MOBILE ? 512 : 1024, MOBILE ? 512 : 1024); light.shadow.bias = -.002; light.shadow.camera.near = .5; light.shadow.camera.far = 30; lantern.add(light);
+  // 내 설계: 주철 가로등. 받침, 가는 기둥, 장식 링, 유리 상자형 등롱과 지붕, 그리고 빛나는 불꽃 심지.
+  const iron = new THREE.MeshStandardMaterial({ color: 0x1f2024, roughness: .55, metalness: .7 }), add = (g, y, m = iron) => { const o = new THREE.Mesh(g, m); o.position.y = y; lantern.add(o); return o; };
+  add(new THREE.CylinderGeometry(.42, .52, .25, 10), .12); add(new THREE.CylinderGeometry(.26, .36, .35, 10), .42);
+  add(new THREE.CylinderGeometry(.075, .11, 2.9, 8), 1.95);
+  for (const y of [.8, 1.7, 2.7]) add(new THREE.TorusGeometry(.13, .035, 6, 14), y).rotation.x = Math.PI / 2;
+  add(new THREE.CylinderGeometry(.34, .2, .22, 8), 3.5); // 등롱 받침
+  const glass = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffc766).multiplyScalar(1.5), transparent: true, opacity: .92 });
+  add(new THREE.BoxGeometry(.42, .6, .42), 3.9, glass);
+  for (const [x, z] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) { const b = new THREE.Mesh(new THREE.BoxGeometry(.05, .66, .05), iron); b.position.set(x * .22, 3.9, z * .22); lantern.add(b); }
+  add(new THREE.ConeGeometry(.42, .34, 4), 4.4).rotation.y = Math.PI / 4; add(new THREE.SphereGeometry(.06, 8, 6), 4.62);
+  const flame = new THREE.Mesh(new THREE.SphereGeometry(.14, 12, 10), new THREE.MeshBasicMaterial({ color: new THREE.Color(0xffe0a0).multiplyScalar(2.2) })); flame.scale.y = 1.5; flame.position.y = 3.85; lantern.add(flame);
+  const bulb = flame;
+  const light = new THREE.PointLight(0xffa860, 110, 22, 2); light.position.y = 3.9; light.castShadow = !LOWQ; light.shadow.mapSize.set(MOBILE ? 512 : 1024, MOBILE ? 512 : 1024); light.shadow.bias = -.002; light.shadow.camera.near = .5; light.shadow.camera.far = 30; lantern.add(light);
   lantern.userData = { bulb, light };
-  scene.add(lantern);
+  lantern.scale.setScalar(.74); scene.add(lantern);
 }
 
 // ---------- assets ----------
