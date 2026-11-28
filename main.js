@@ -252,50 +252,46 @@ async function openDetail(h) {
   const inst = makeInstance(gltf, 1.75, 'y', 0); pv.sc.add(inst.wrap); pv.inst = inst; pv.t = 0; pv.clipList = ['Idle', ...h.anim.map(n => ({ melee: 'Sword_Slash', gun: 'Gun_Shoot', punch: 'Punch_Left', kick: 'Kick_Right', cast: 'Interact', wave: 'Wave' }[n]))];
   pv.ci = -1; const loop = () => { if (pv.stop || pv.inst !== inst) return; requestAnimationFrame(loop); const dt = Math.min(pv.clock.getDelta(), .05); pv.t += dt; if (pv.t > (pv.ci <= 0 ? 2.2 : 1.6) || pv.ci < 0) { pv.t = 0; pv.ci = (pv.ci + 1) % pv.clipList.length; play(inst, findClip(inst.clips, new RegExp(pv.pclip = pv.clipList[pv.ci] + '$')), { loop: pv.ci === 0, fade: .12 }); } inst.wrap.rotation.y += dt * .6; inst.mixer.update(dt); pv.r.render(pv.sc, pv.cam); }; loop();
 }
-// ---------- story scenes (own illustration: hand-written SVG; own dialogue) ----------
-const STORY_ART = {
-  intro: `<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-<defs><linearGradient id="sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050816"/><stop offset=".6" stop-color="#101a38"/><stop offset="1" stop-color="#2a2140"/></linearGradient>
-<radialGradient id="rg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ff7ac0" stop-opacity=".9"/><stop offset=".4" stop-color="#b04ad8" stop-opacity=".35"/><stop offset="1" stop-color="#b04ad8" stop-opacity="0"/></radialGradient>
-<radialGradient id="lg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd58a" stop-opacity=".85"/><stop offset="1" stop-color="#ff9b3d" stop-opacity="0"/></radialGradient>
-<linearGradient id="gd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1830"/><stop offset="1" stop-color="#07060d"/></linearGradient>
-<filter id="bl"><feGaussianBlur stdDeviation="6"/></filter></defs>
-<rect width="1600" height="900" fill="url(#sk)"/>
-<g fill="#cfd8ff" opacity=".8">${Array.from({ length: 60 }, (_, i) => `<circle cx="${(i * 197 + 53) % 1600}" cy="${(i * 89 + 31) % 420}" r="${(i % 4) * .4 + .7}"/>`).join('')}</g>
-<ellipse cx="800" cy="330" rx="330" ry="420" fill="url(#rg)"/>
-<path d="M800 -10 L772 120 L812 200 L760 320 L822 430 L780 560 L806 640 L796 640 L770 560 L808 430 L748 320 L798 200 L758 120 L790 -10Z" fill="#ffe3f4" filter="url(#bl)" opacity=".9"/>
-<path d="M800 -10 L772 120 L812 200 L760 320 L822 430 L780 560 L806 640 L796 640 L770 560 L808 430 L748 320 L798 200 L758 120 L790 -10Z" fill="#fff4fb"/>
-<g transform="translate(250 250)" opacity=".92"><path d="M0 260 L0 120 L40 120 L40 90 L70 90 L70 120 L110 120 L110 50 L140 20 L170 50 L170 120 L210 120 L210 90 L240 90 L240 260Z" fill="#171220" stroke="#d99a4e" stroke-width="3"/><circle cx="140" cy="160" r="16" fill="#ffb355"/></g>
-<g transform="translate(980 190)" opacity=".92"><path d="M0 330 L0 140 L60 140 L60 60 L120 60 L120 200 L170 200 L170 100 L230 100 L230 330Z" fill="#0f1730" stroke="#5cb3ee" stroke-width="3"/>${Array.from({ length: 14 }, (_, i) => `<rect x="${12 + (i % 3) * 18}" y="${160 + Math.floor(i / 3) * 30}" width="8" height="12" fill="#7fd0ff"/>`).join('')}</g>
-<g transform="translate(1260 120) rotate(-14)" opacity=".92"><ellipse cx="0" cy="0" rx="150" ry="34" fill="none" stroke="#a77be8" stroke-width="6"/><ellipse cx="0" cy="0" rx="62" ry="22" fill="#110d22" stroke="#a77be8" stroke-width="3"/><circle cx="0" cy="0" r="8" fill="#c9b0ff"/></g>
-<path d="M0 640 Q400 600 800 640 T1600 630 L1600 900 L0 900Z" fill="url(#gd)"/>
-<path d="M-50 760 Q500 700 800 650 Q1100 700 1650 770" fill="none" stroke="#6a78c8" stroke-width="3" opacity=".35"/>
-<ellipse cx="800" cy="650" rx="300" ry="28" fill="#ff7ac0" opacity=".16"/><rect y="560" width="1600" height="120" fill="#8a7fc0" opacity=".06"/>
-<ellipse cx="420" cy="560" rx="300" ry="260" fill="url(#lg)"/>
-<g transform="translate(420 372)"><rect x="-6" y="40" width="12" height="260" fill="#0a0910"/><rect x="-26" y="20" width="52" height="8" fill="#0a0910"/><path d="M-22 20 L-16 -34 L16 -34 L22 20Z" fill="#ffe2a0"/><path d="M-26 -34 L0 -58 L26 -34Z" fill="#0a0910"/><rect x="-20" y="294" width="40" height="10" fill="#0a0910"/></g>
-<g fill="#07060d">${[[540, 640, 1.1], [620, 655, 1], [700, 645, 1.05], [1000, 652, .95], [1090, 664, .85]].map(([x, y, k]) => `<g transform="translate(${x} ${y}) scale(${k})"><ellipse cx="0" cy="20" rx="26" ry="7" opacity=".5"/><path d="M-15 20 L-12 -52 L-20 -66 Q0 -92 20 -66 L12 -52 L15 20Z"/><circle cx="0" cy="-76" r="14"/></g>`).join('')}</g>
-</svg>`,
-};
+// ---------- story scenes (staged in the real game scene; own dialogue) ----------
 const STORY = {
   intro: [
     { who: null, t: '세 시대가 한 하늘 아래 겹친 밤. 갈라진 하늘 틈, 균열에서 쏟아진 어둠이 모든 불빛을 삼키고 있었다.' },
-    { who: 'w_medieval', t: '마지막 등불이 아직 켜져 있다. 이 불이 꺼지면 돌아갈 길도 같이 사라진다.' },
-    { who: 'w_soldier', t: '성벽이 있던 자리에 이제 철골이 서 있고, 그 위로 별이 부서지고 있어요. 대체 몇 개의 세계가 섞인 거죠?' },
-    { who: 'w_witch', t: '균열의 가장자리는 세 가지 빛깔로 울고 있어. 전부 따라가 보면 중심에 닿을 거야.' },
-    { who: 'm_king', t: '재가 된 왕국의 왕으로서 명한다. 등불을 지켜라. 그리고 균열의 끝까지 가자.' },
+    { who: 0, t: '마지막 등불이 아직 켜져 있다. 이 불이 꺼지면 돌아갈 길도 같이 사라진다.' },
+    { who: 2, t: '성벽이 있던 자리에 철골이 서 있고, 그 위로 별이 부서지고 있어요. 대체 몇 개의 세계가 섞인 거죠?' },
+    { who: 3, t: '균열의 가장자리는 세 가지 빛깔로 울고 있어. 전부 따라가 보면 중심에 닿을 거야.' },
+    { who: 1, t: '재가 된 왕국의 왕으로서 명한다. 등불을 지켜라. 그리고 균열의 끝까지 가자.' },
   ],
 };
+let CINE = null;
+function cineStart() {
+  const lx = -1.8, cz = CEN.z, saved = G.heroes.map(h => ({ h, p: h.inst.wrap.position.clone(), r: h.inst.wrap.rotation.y }));
+  const n = G.heroes.length;
+  G.heroes.forEach((h, i) => { const k = n > 1 ? i / (n - 1) : .5; h.inst.wrap.position.set(lx + 1.3 + k * 4.4, 0, cz + .6 + Math.abs(k - .5) * 1.2); h.inst.wrap.rotation.y = (.5 - k) * .35; try { play(h.inst, findClip(h.inst.clips, /Idle$/), { loop: true, fade: .1 }); } catch (e) { } });
+  // the rift: jagged emissive crack + soft glow + pink rim light, built here (own code)
+  const rift = new THREE.Group(); const sh = new THREE.Shape(); const pts = [[0, 14], [-.5, 10], [.35, 7.5], [-.7, 4.6], [.6, 2.2], [-.2, 0], [.1, 0], [.8, 2.2], [-.4, 4.6], [.9, 7.5], [.05, 10], [.55, 14]]; sh.moveTo(pts[0][0], pts[0][1]); pts.slice(1).forEach(p => sh.lineTo(p[0], p[1]));
+  const crack = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, .85, .97).multiplyScalar(2.4), fog: false })); rift.add(crack);
+  const cv = document.createElement('canvas'); cv.width = cv.height = 128; const cx = cv.getContext('2d'), gr = cx.createRadialGradient(64, 64, 0, 64, 64, 64); gr.addColorStop(0, 'rgba(255,120,200,.85)'); gr.addColorStop(.4, 'rgba(170,70,220,.35)'); gr.addColorStop(1, 'rgba(170,70,220,0)'); cx.fillStyle = gr; cx.fillRect(0, 0, 128, 128);
+  const glow = new THREE.Mesh(new THREE.PlaneGeometry(16, 20), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false })); glow.position.set(0, 6, -.2); rift.add(glow);
+  rift.scale.x = .55; rift.position.set(lx + 3.2, 0, cz - 9); scene.add(rift);
+  const rim = new THREE.PointLight(0xff6fc0, 70, 20, 2); rim.position.set(lx + 3.2, 4, cz - 4); scene.add(rim);
+  CINE = { t: 0, saved, rift, rim, lx, cz, tick(dt) { this.t += dt; const k = Math.min(1, this.t / 14), e = k * k * (3 - 2 * k); camera.position.set(this.lx + 4.2 - e * 1.2, 1.5 + e * .2, this.cz + 9.2 - e * 1.6); camera.lookAt(this.lx + 3.4 - e * .5, 1.45 + e * .1, this.cz); this.rim.intensity = 60 + Math.sin(this.t * 2.2) * 14; this.rift.children[1].material.opacity = .85 + Math.sin(this.t * 3.1) * .12; saved.forEach(o => o.h.inst.mixer.update(dt)); } };
+  camera.fov = PORT ? 58 : 36; camera.updateProjectionMatrix(); document.body.classList.add('cine');
+}
+function cineEnd() {
+  if (!CINE) return; const c = CINE; CINE = null; scene.remove(c.rift, c.rim); c.saved.forEach(o => { o.h.inst.wrap.position.copy(o.p); o.h.inst.wrap.rotation.y = o.r; });
+  document.body.classList.remove('cine'); camera.fov = PORT ? 58 : 42; camera.updateProjectionMatrix();
+}
 function showStory(key, done) {
   const lines = STORY[key]; let i = 0;
+  const party = G.heroes.map(h => h.def);
   const el = document.createElement('div'); el.id = 'story';
-  el.innerHTML = `<div class="art">${STORY_ART[key]}</div><div class="vig"></div><button class="skip" id="stSkip">건너뛰기</button><div class="dlg" id="stDlg"></div>`;
-  document.body.appendChild(el);
-  fillPortraits([...new Set(lines.map(l => l.who).filter(Boolean))]);
-  const end = () => { el.classList.add('out'); setTimeout(() => el.remove(), 350); done(); };
+  el.innerHTML = `<div class="vig"></div><button class="skip" id="stSkip">건너뛰기</button><div class="dlg" id="stDlg"></div>`;
+  document.body.appendChild(el); cineStart();
+  fillPortraits(party.map(d => d.id));
+  const end = () => { el.classList.add('out'); setTimeout(() => el.remove(), 350); cineEnd(); done(); };
   const draw = () => {
-    const l = lines[i], d = $('stDlg'), h = l.who && heroById[l.who];
+    const l = lines[i], d = $('stDlg'), h = l.who !== null && l.who !== undefined ? (party[l.who] || party[0]) : null;
     d.innerHTML = `${h ? ptHtml(h.id, 'lg') : '<span class="pt lg nar">◈</span>'}<div class="tx"><b class="${h ? '' : 'nar'}" ${h ? `style="color:${ERA[h.era].color}"` : ''}>${h ? h.name : '나레이션'}</b><p>${l.t}</p></div><span class="nx">${i + 1} / ${lines.length} · 클릭하여 계속</span>`;
-    if (h) document.querySelectorAll(`#stDlg img[data-pid="${h.id}"]`).forEach(im => { if (PORT_IMG[h.id]) im.src = PORT_IMG[h.id]; });
     d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
   };
   el.onclick = e => { if (e.target.id === 'stSkip') return end(); if (++i >= lines.length) end(); else draw(); };
@@ -308,7 +304,7 @@ $('startBtn').onclick = () => {
     save.embers += g; save.best = Math.max(save.best || 0, save.run.maxStage); save.run = null; persist();
   }
   save.party = selected.slice(); persist();
-  if (!(save.story && save.story.intro)) showStory('intro', () => { save.story = Object.assign(save.story || {}, { intro: 1 }); persist(); startGame(); }); else startGame(); };
+  if (!(save.story && save.story.intro)) startGame().then(() => { if (!G || G.over) return; G.paused = true; showStory('intro', () => { save.story = Object.assign(save.story || {}, { intro: 1 }); persist(); if (G) G.paused = false; }); }); else startGame(); };
 $('contBtn').onclick = () => { if (save.run) startGame(true); };
 $('resetBtn').onclick = () => { if (confirm('저장 데이터를 지울까요?')) { localStorage.removeItem(SAVE_KEY); location.reload(); } };
 
@@ -970,6 +966,7 @@ function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), .05);
   if (G && !G.over && !G.paused && $('loading').classList.contains('hidden')) { const n = TS * save.speed; for (let i = 0; i < n && G && !G.over && !G.paused; i++) update(dt); }
+  if (CINE) CINE.tick(dt);
   if (composer) composer.render(); else renderer.render(scene, camera);
 }
 buildWorld(0);

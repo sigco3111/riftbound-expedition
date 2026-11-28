@@ -178,7 +178,7 @@ summary{cursor:pointer;text-align:center}
 #modal{padding-bottom:max(28px,calc(16px + env(safe-area-inset-bottom)))}
 .acc{color:var(--accent)}
 /* story scene */
-#story{position:fixed;inset:0;z-index:60;background:#050816;cursor:pointer;transition:opacity .35s}
+#story{position:fixed;inset:0;z-index:60;background:transparent;cursor:pointer;transition:opacity .35s}
 #story.out{opacity:0}
 #story .art,#story .art svg{position:absolute;inset:0;width:100%;height:100%}
 #story .vig{position:absolute;inset:0;background:radial-gradient(ellipse at 50% 40%,transparent 45%,rgba(3,4,10,.65) 100%),linear-gradient(transparent 55%,rgba(4,5,12,.88))}
@@ -194,3 +194,4 @@ summary{cursor:pointer;text-align:center}
 #story .dlg p{margin:6px 0 0;font-size:16px;line-height:1.65;color:#e8ecf5;word-break:keep-all}
 #story .dlg .nx{position:absolute;right:16px;bottom:8px;font-size:11px;color:var(--dim)}
 @media (max-width:640px){#story .dlg{padding:14px;gap:10px}#story .dlg .pt.lg{width:52px;height:52px}#story .dlg p{font-size:14px}}
+body.cine #hud{display:none}
