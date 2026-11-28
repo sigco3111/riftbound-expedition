@@ -298,7 +298,7 @@ async function startGame(resume) {
 }
 function cleanup() {
   if (G.lightMesh) scene.remove(G.lightMesh);
-  [...G.heroes.map(h => h.inst.wrap), ...G.enemies.map(e => e.inst.wrap), ...G.proj.map(p => p.mesh), ...G.fx.map(f => f.mesh), ...G.turrets.map(t => t.mesh)].forEach(o => scene.remove(o));
+  [...G.heroes.map(h => h.inst.wrap), ...G.enemies.map(e => e.inst.wrap), ...G.proj.map(p => p.mesh), ...G.fx.map(f => f.mesh), ...G.turrets.map(t => t.mesh)].forEach(o => scene.remove(o)); G.fx.forEach(f => { if (f.trail) freePuff(f.mesh); else { f.mesh.geometry.dispose(); f.mesh.material.dispose(); } });
   G = null;
 }
 function buildPartyUI() {
@@ -466,41 +466,52 @@ function stepProjectiles(dt) {
 }
 function stepFx(dt) {
   for (const f of G.fx) { f.life -= dt; const k = 1 - f.life / f.max; if (f.trail) { f.mesh.scale.setScalar(f.trail * (1 - k * .7)); f.mesh.material.opacity = .6 * (1 - k); if (f.vx !== undefined) { f.vy -= 9 * dt; f.mesh.position.x += f.vx * dt; f.mesh.position.y = Math.max(.05, f.mesh.position.y + f.vy * dt); f.mesh.position.z += f.vz * dt; } continue; } f.mesh.scale.setScalar(.3 + k * .7 + .01); f.mesh.material.opacity = Math.max(0, .8 * (1 - k)); }
-  G.fx = G.fx.filter(f => { if (f.life <= 0) scene.remove(f.mesh); return f.life > 0; });
+  G.fx = G.fx.filter(f => { if (f.life <= 0) { if (f.trail) freePuff(f.mesh); else { scene.remove(f.mesh); f.mesh.geometry.dispose(); f.mesh.material.dispose(); } } return f.life > 0; });
 }
 function trailPuff(pos, color, r, life) {
-  const m = new THREE.Mesh(pgeo('tp', () => new THREE.SphereGeometry(1, 8, 6)), addMat(color, .5)); m.scale.setScalar(r); m.position.copy(pos); scene.add(m);
+  const m = getPuff(color, .5); m.scale.setScalar(r); m.position.copy(pos); scene.add(m);
   G.fx.push({ mesh: m, life, max: life, trail: r });
 }
 function projHit(p) {
   const pos = p.target.pos, c = p.color;
   const n = p.kind === 'orb' ? 7 : 4;
-  for (let i = 0; i < n; i++) { const m = new THREE.Mesh(pgeo('tp', () => new THREE.SphereGeometry(1, 8, 6)), addMat(p.kind === 'bolt' ? 0xffe2a8 : c, .8)); m.scale.setScalar(.07); m.position.set(pos.x, 1, pos.z); scene.add(m); G.fx.push({ mesh: m, life: .3, max: .3, trail: .07, vx: (Math.random() - .5) * 5, vy: Math.random() * 3 + 1, vz: (Math.random() - .5) * 5 }); }
-  const fl = new THREE.Mesh(pgeo('tp', () => new THREE.SphereGeometry(1, 8, 6)), addMat(0xffffff, .9)); fl.scale.setScalar(p.kind === 'orb' ? .5 : .28); fl.position.set(pos.x, 1, pos.z); scene.add(fl); G.fx.push({ mesh: fl, life: .15, max: .15, trail: p.kind === 'orb' ? .5 : .28 });
+  for (let i = 0; i < n; i++) { const m = getPuff(p.kind === 'bolt' ? 0xffe2a8 : c, .8); m.scale.setScalar(.07); m.position.set(pos.x, 1, pos.z); scene.add(m); G.fx.push({ mesh: m, life: .3, max: .3, trail: .07, vx: (Math.random() - .5) * 5, vy: Math.random() * 3 + 1, vz: (Math.random() - .5) * 5 }); }
+  const fl = getPuff(0xffffff, .9); fl.scale.setScalar(p.kind === 'orb' ? .5 : .28); fl.position.set(pos.x, 1, pos.z); scene.add(fl); G.fx.push({ mesh: fl, life: .15, max: .15, trail: p.kind === 'orb' ? .5 : .28 });
 }
 // projectile models: own procedural meshes (forward = +Z), shared geometry
 const PG = {};
 const pgeo = (k, f) => PG[k] || (PG[k] = f());
-const addMat = (c, o = 1) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false });
+const MC = new Map(); // shared static materials (never mutated, never disposed)
+const hex = c => (c && c.getHex) ? c.getHex() : c;
+const addMat = (c, o = 1) => { const k = 'a' + hex(c) + '_' + o; let m = MC.get(k); if (!m) { m = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false }); MC.set(k, m); } return m; };
+const bm = (c, dbl) => { const k = 'b' + hex(c) + (dbl ? 'd' : ''); let m = MC.get(k); if (!m) { m = new THREE.MeshBasicMaterial(dbl ? { color: c, side: THREE.DoubleSide } : { color: c }); MC.set(k, m); } return m; };
+// pooled fading puffs/sparks: own material each (opacity animates), reused instead of re-created
+const PUFF_POOL = [];
+function getPuff(color, op) {
+  let m = PUFF_POOL.pop();
+  if (!m) m = new THREE.Mesh(pgeo('tp', () => new THREE.SphereGeometry(1, 8, 6)), new THREE.MeshBasicMaterial({ transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  m.material.color.set(color); m.material.opacity = op; m.visible = true; return m;
+}
+function freePuff(m) { scene.remove(m); if (PUFF_POOL.length < 160) PUFF_POOL.push(m); else m.material.dispose(); }
 const PROJ_KIND = { w_soldier: 'bolt', w_witch: 'orb', m_swat: 'bullet', w_scifi: 'laser', m_astronaut: 'orb' };
 function projMesh(kind, color) {
   const g = new THREE.Group();
   const col = new THREE.Color(color);
   if (kind === 'bolt') { // crossbow bolt: wood shaft, steel head, fletching
-    const shaft = new THREE.Mesh(pgeo('bs', () => { const q = new THREE.CylinderGeometry(.03, .03, .7, 6); q.rotateX(Math.PI / 2); return q; }), new THREE.MeshBasicMaterial({ color: 0xc9a46a }));
-    const head = new THREE.Mesh(pgeo('bh', () => { const q = new THREE.ConeGeometry(.07, .2, 6); q.rotateX(Math.PI / 2); q.translate(0, 0, .45); return q; }), new THREE.MeshBasicMaterial({ color: 0xdfe6ee }));
-    const fl = new THREE.Mesh(pgeo('bf', () => { const q = new THREE.PlaneGeometry(.16, .16); q.translate(0, 0, -.3); return q; }), new THREE.MeshBasicMaterial({ color: 0xb84a3a, side: THREE.DoubleSide }));
+    const shaft = new THREE.Mesh(pgeo('bs', () => { const q = new THREE.CylinderGeometry(.03, .03, .7, 6); q.rotateX(Math.PI / 2); return q; }), bm(0xc9a46a));
+    const head = new THREE.Mesh(pgeo('bh', () => { const q = new THREE.ConeGeometry(.07, .2, 6); q.rotateX(Math.PI / 2); q.translate(0, 0, .45); return q; }), bm(0xdfe6ee));
+    const fl = new THREE.Mesh(pgeo('bf', () => { const q = new THREE.PlaneGeometry(.16, .16); q.translate(0, 0, -.3); return q; }), bm(0xb84a3a, true));
     const fl2 = fl.clone(); fl2.rotation.z = Math.PI / 2; g.add(shaft, head, fl, fl2);
     g.add(new THREE.Mesh(pgeo('bg', () => { const q = new THREE.CylinderGeometry(.05, .01, .6, 6, 1, true); q.rotateX(-Math.PI / 2); q.translate(0, 0, -.55); return q; }), addMat(0xffe2a8, .3)));
   } else if (kind === 'orb') { // magic orb: bright core, soft halo, cross shards
-    g.add(new THREE.Mesh(pgeo('oc', () => new THREE.SphereGeometry(.11, 10, 8)), new THREE.MeshBasicMaterial({ color: col.clone().lerp(new THREE.Color(0xffffff), .75) })));
+    g.add(new THREE.Mesh(pgeo('oc', () => new THREE.SphereGeometry(.11, 10, 8)), bm(col.clone().lerp(new THREE.Color(0xffffff), .75))));
     g.add(new THREE.Mesh(pgeo('oh', () => new THREE.SphereGeometry(.17, 12, 10)), addMat(color, .3)));
     const sh = new THREE.Mesh(pgeo('os', () => new THREE.OctahedronGeometry(.13, 0)), addMat(color, .8)); sh.name = 'spin'; g.add(sh);
   } else if (kind === 'laser') { // energy beam
-    g.add(new THREE.Mesh(pgeo('lc', () => { const q = new THREE.CylinderGeometry(.04, .04, 1.3, 6); q.rotateX(Math.PI / 2); return q; }), new THREE.MeshBasicMaterial({ color: 0xffffff })));
+    g.add(new THREE.Mesh(pgeo('lc', () => { const q = new THREE.CylinderGeometry(.04, .04, 1.3, 6); q.rotateX(Math.PI / 2); return q; }), bm(0xffffff)));
     g.add(new THREE.Mesh(pgeo('lh', () => { const q = new THREE.CylinderGeometry(.11, .11, 1.4, 8); q.rotateX(Math.PI / 2); return q; }), addMat(color, .45)));
   } else { // bullet: brass slug + tracer
-    g.add(new THREE.Mesh(pgeo('ul', () => { const q = new THREE.CapsuleGeometry(.05, .22, 3, 6); q.rotateX(Math.PI / 2); return q; }), new THREE.MeshBasicMaterial({ color: 0xffe9a8 })));
+    g.add(new THREE.Mesh(pgeo('ul', () => { const q = new THREE.CapsuleGeometry(.05, .22, 3, 6); q.rotateX(Math.PI / 2); return q; }), bm(0xffe9a8)));
     g.add(new THREE.Mesh(pgeo('ut', () => { const q = new THREE.CylinderGeometry(.035, .01, 1.1, 6, 1, true); q.rotateX(-Math.PI / 2); q.translate(0, 0, -.7); return q; }), addMat(color, .55)));
   }
   return g;
