@@ -6,7 +6,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { MOBILE, SZ, roadZ, makeGround, makeGrass, makeEnv } from './scenery.js';
-import { HEROES, ERA, ENEMIES, UPGRADES, CREDITS, ZONES } from './data.js';
+import { HEROES, ERA, ENEMIES, CREDITS, ZONES } from './data.js';
 
 const $ = id => document.getElementById(id);
 const Q = new URLSearchParams(location.search);
