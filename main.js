@@ -363,7 +363,7 @@ function stageFlow(dt) {
     if (!alive.some(e => e.pos.x < 12) && (alive.length || G.spawnQ.length)) { G.marching = true; advance(dt); }
     if (!alive.length && !G.spawnQ.length) {
       G.heroes.forEach(h => { if (!h.alive) { h.alive = true; h.hp = h.maxhp * .4; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); } else h.hp = Math.min(h.maxhp, h.hp + h.maxhp * Math.min(.4, .03 + .025 * G.camp.dress)); });
-      G.waveActive = false; G.stT = 0; G.packsDone++; autoCamp();
+      G.waveActive = false; G.stT = 0; G.packsDone++; if (save.autoCamp) autoCamp(); campHint();
       if (G.state === 'boss') { G.boss = null; G.packsDone = 4; G.state = 'relight'; G.maxStage = Math.max(G.maxStage, G.wave); toast('길목의 등불에 불을 붙입니다'); G.heroes.forEach(h => { h.alive = true; h.hp = h.maxhp; h.inst.wrap.visible = true; }); G.tonics = maxTonics(); }
       else { G.state = 'breather'; }
     }
@@ -508,7 +508,7 @@ function dropLoot(e) {
       h.gear[slot] = it; recalcHero(h); if (it.g === 3) G.relics++;
       G.loot.push(`<span style="color:${GRADES[it.g][2]}">${h.def.name}: ${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}</span>`);
       toast(`${h.def.name} ${itemName(it)} 획득`);
-    } else { G.earned += Math.round(it.pow * .6 * sm * Math.pow(1.02, G.wave)); }
+    } else { const v = Math.round(it.pow * .6 * sm * Math.pow(1.02, G.wave)); G.bag = G.bag || []; it.hi = G.heroes.indexOf(h); G.bag.push(it); if (G.bag.length > 10) { const o = G.bag.shift(); G.earned += Math.round(o.pow * .6 * sm); } }
   }
 }
 // ---------- 은화로 캠프 자동 강화 ----------
@@ -531,6 +531,52 @@ function useTonic(dt) {
   const h = G.heroes.find(x => x.alive && x.hp < x.maxhp * .33); if (!h) return;
   G.tonics--; G.tonicCd = 5; h.hp = Math.min(h.maxhp, h.hp + h.maxhp * Math.min(.7, .35 + .025 * G.camp.tonic)); toast(`${h.def.name} 탕약 사용`);
 }
+
+// ---------- 정비 허브: 언제든 열 수 있고, 열려 있는 동안 전투/행군/자동 타이머가 멈춘다 ----------
+const trainCost = (h, k) => Math.round(35 * Math.pow(1.38, (h.tr || {})[k] | 0) * (k === 'hp' ? 1 : 1.1));
+function train(h, k, free) {
+  h.tr = h.tr || {}; const n = h.tr[k] | 0; const c = trainCost(h, k); if (!free) { if (G.earned < c) return false; G.earned -= c; }
+  h.tr[k] = n + 1; const r = (1 + .06 * (n + 1)) / (1 + .06 * n);
+  if (k === 'atk') h.mul = (h.mul || 1) * r; else { h.maxhp *= r; h.hp *= r; } return true;
+}
+function planCamp() { // 추천 정비: 구매 순서를 시뮬레이션만 하고 실제로는 적용하지 않는다
+  let silver = G.earned; const lv = { ...G.camp }, plan = [], cost = id => { const c = CAMP.find(x => x[0] === id); return Math.round(c[4] * Math.pow(1.42, lv[id])); }; let total = 0;
+  for (let g = 0; g < 20; g++) { let best = null, bc = 1e18; for (const c of CAMP) { const k = cost(c[0]) * c[5]; if (k < bc) { bc = k; best = c; } } if (best && silver >= cost(best[0])) { const k = cost(best[0]); silver -= k; total += k; lv[best[0]]++; plan.push(`${best[1]} ${lv[best[0]]}`); } else break; }
+  return { plan, total };
+}
+let hubOpen = false;
+function campHint() { const b = $('campBtn'); if (b) { b.classList.add('ready'); b.textContent = '정비 ●'; } toast('정비 가능 (우상단 정비 버튼)'); }
+function openHub(onBack) {
+  if (!G || G.over || hubOpen) return; const was = G.paused; if (!onBack && was) return;
+  hubOpen = true; G.paused = true; const m = $('modal'); m.classList.remove('hidden'); let tab = -1, pv = null;
+  const gearTxt = it => it ? `${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}` : '없음';
+  const close = () => { hubOpen = false; $('campBtn').classList.remove('ready'); $('campBtn').textContent = '정비'; if (onBack) onBack(); else { m.classList.add('hidden'); G.paused = false; } };
+  const render = () => {
+    const tabs = ['<button class="ghost" data-t="-1">' + (tab === -1 ? '[파티]' : '파티') + '</button>'].concat(G.heroes.map((h, i) => `<button class="ghost" data-t="${i}">${tab === i ? '[' + h.def.name + ']' : h.def.name}</button>`)).join(' ');
+    let body = '';
+    if (tab === -1) {
+      body = CAMP.map(c => `<button class="opt" data-c="${c[0]}" ${G.earned < campCost(c[0]) ? 'disabled' : ''}><b>${c[1]}</b> Lv ${G.camp[c[0]]} · ${c[2]}<br>비용 ${campCost(c[0])} 은화</button>`).join('');
+      pv = planCamp();
+      body += `<p style="font-size:13px">추천 정비: ${pv.plan.length ? pv.plan.join(', ') + ` (총 ${pv.total} 은화)` : '지금은 살 수 있는 것이 없음'}</p><button class="opt" data-rec="1" ${pv.plan.length ? '' : 'disabled'}><b>추천대로 정비</b><br>위 목록을 그대로 구매합니다</button><button class="ghost" id="acBtn">자동 정비: ${save.autoCamp ? '켜짐(팩 종료마다 추천 구매)' : '꺼짐'}</button>`;
+    } else {
+      const h = G.heroes[tab], g = h.gear || {};
+      body = `<p><b>${h.def.name}</b> · 체력 ${Math.round(h.maxhp)} · 공격 배율 ${(h.mul || 1).toFixed(2)}</p>` +
+        ['atk', 'hp'].map(k => `<button class="opt" data-tr="${k}" ${G.earned < trainCost(h, k) ? 'disabled' : ''}><b>${k === 'atk' ? '공격 훈련' : '체력 훈련'}</b> Lv ${(h.tr || {})[k] | 0} · ${k === 'atk' ? '공격력' : '체력'} +6%<br>비용 ${trainCost(h, k)} 은화</button>`).join('') +
+        `<p style="font-size:13px">장착: ${SLOTS.map(sl => sl[1] + ' ' + gearTxt(g[sl[0]])).join(' / ')}</p>` +
+        (G.bag || []).map((it, bi) => ({ it, bi })).filter(x => x.it.hi === tab).map(x => `<button class="opt" data-eq="${x.bi}"><b>${gearTxt(x.it)}</b><br>장착 (현재 ${gearTxt(g[x.it.slot])}는 가방으로)</button>`).join('');
+    }
+    m.innerHTML = `<h1>정비</h1><p>은화 <b>${Math.round(G.earned)}</b> · 열려 있는 동안 전투는 멈춰 있습니다</p><div>${tabs}</div>${body}<br><button class="mbtn" id="hubClose">닫고 계속</button>`;
+    m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; render(); });
+    m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { buyCamp(b.dataset.c); render(); });
+    m.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { train(G.heroes[tab], b.dataset.tr); render(); });
+    m.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { const h = G.heroes[tab], it = G.bag[+b.dataset.eq]; G.bag.splice(+b.dataset.eq, 1); h.gear = h.gear || {}; const cur = h.gear[it.slot]; if (cur) { cur.hi = tab; G.bag.push(cur); } delete it.hi; h.gear[it.slot] = it; recalcHero(h); render(); });
+    const rc = m.querySelector('[data-rec]'); if (rc) rc.onclick = () => { autoCamp(); render(); };
+    const ac = $('acBtn'); if (ac) ac.onclick = () => { save.autoCamp = !save.autoCamp; persist(); render(); };
+    $('hubClose').onclick = close;
+  };
+  render();
+}
+$('campBtn').onclick = () => openHub();
 // ---------- 런 종료: 엠버 정산 + 영구 강화 ----------
 const BOONS = [['dmg', '분노의 엠버', '모든 런 공격력 +6%', 2, 20], ['hp', '인내의 엠버', '모든 런 체력 +6%', 2, 20], ['silver', '풍요의 엠버', '모든 런 은화 +10%', 2, 10], ['xp', '기억의 엠버', '모든 런 경험치 +8%', 2, 10], ['start', '길의 엠버', '한 스테이지 앞에서 시작', 4, 12]];
 const boonLv = id => save.boons[id] || 0;
@@ -593,17 +639,19 @@ function offerUpgrade() {
   }
   const dg = danger(true), rec = stewardPush();
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>다음 구간 위험도: <b style="color:${dg[2]}">${dg[0]}</b> · 레벨 ${G.level}</p><button class="opt" data-go="1"><b>전진${rec ? ' (추천)' : ''}</b><br>다음 스테이지로 나아갑니다</button><button class="opt" data-go="0"><b>같은 구간 반복${rec ? '' : ' (추천)'}</b><br>경험치·은화 80%, 장비와 경험치를 더 모읍니다</button><p id="cd" style="opacity:.7;font-size:12px"></p>`;
+  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>다음 구간 위험도: <b style="color:${dg[2]}">${dg[0]}</b> · 레벨 ${G.level}</p><button class="opt" data-go="1"><b>전진${rec ? ' (추천)' : ''}</b><br>다음 스테이지로 나아갑니다</button><button class="opt" data-go="0"><b>같은 구간 반복${rec ? '' : ' (추천)'}</b><br>경험치·은화 80%, 장비와 경험치를 더 모읍니다</button><button class="opt" id="hubOpen"><b>정비</b><br>장비, 훈련, 캠프를 조정합니다 (열면 자동 진행이 멈춥니다)</button><p id="cd" style="opacity:.7;font-size:12px"></p>`;
   let done = false, stop = null;
   const go = push => { if (done) return; done = true; stop(); m.classList.add('hidden'); G.paused = false; if (push) { G.holdCount = 0; nextWave(); } else { G.holdCount++; G.state = 'init'; beginStage(); } };
   stop = countdown(m, 7, () => go(rec), '추천 선택으로 진행');
-  m.querySelectorAll('.opt').forEach(b => b.onclick = () => go(b.dataset.go === '1'));
+  m.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go === '1'));
+  const html = m.innerHTML, bindClear = () => { m.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go === '1')); $('hubOpen').onclick = () => { if (done) return; stop(); hubOpen = false; openHub(() => { m.innerHTML = html; bindClear(); const cd = $('cd'); if (cd) cd.textContent = ''; }); }; };
+  bindClear();
 }
 
 // ---------- 저장 / 이어하기 (스테이지 시작 시점 스냅샷, 체력은 가득 채워 복원) ----------
 function snapshotRun() {
   if (!G || G.over || !G.heroes.length) return;
-  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, gear: G.heroes.map(h => h.gear || {}) };
+  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, gear: G.heroes.map(h => h.gear || {}), train: G.heroes.map(h => ({ ...(h.tr || {}) })), bag: G.bag || [] };
   persist();
 }
 function restoreRun(R) {
@@ -613,6 +661,7 @@ function restoreRun(R) {
   G.bonus.atk *= 1 + .08 * G.camp.whet;
   { const k = 1 + .08 * G.camp.dress; G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
   G.heroes.forEach((h, i) => { h.gear = R.gear[i] || {}; recalcHero(h); });
+  G.bag = (R.bag || []).slice(0, 10); G.heroes.forEach((h, i) => { const t = (R.train || [])[i] || {}; for (let n = 0; n < (t.atk | 0); n++) train(h, 'atk', true); for (let n = 0; n < (t.hp | 0); n++) train(h, 'hp', true); });
   G.cardStack = {};
   const pool = cardPool();
   for (const id in R.cardStack) { const c = pool.find(x => x.id === id); if (c) for (let n = 0; n < R.cardStack[id]; n++) c.apply(G); }
