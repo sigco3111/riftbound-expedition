@@ -634,10 +634,10 @@ function update(dt) {
     if (live.length) G.flare = Math.min(1, G.flare + dt * .012 * (1 + .3 * cardLv('p:flare')));
     if (!manual && G.flare >= 1 && live.length && G.heroes.some(h => h.alive)) {
       const c = lightCarrier(), inR = live.filter(e => Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < lightRadius()).length, ph = G.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0) / Math.max(1, G.heroes.reduce((a, h) => a + h.maxhp, 0));
-      if (inR >= Math.min(5, Math.max(3, live.length)) || (G.boss && G.boss.alive && ph < .5) || G.heroes.some(h => h.alive && h.hp < h.maxhp * .25)) fireFlare();
+      if (inR >= Math.min(5, Math.max(3, live.length)) || (G.boss && G.boss.alive && (G.boss.swing || ph < .5)) || G.heroes.some(h => h.alive && h.hp < h.maxhp * .25)) fireFlare();
     }
-    if (!G.lightMesh) { const m = new THREE.Mesh(new THREE.RingGeometry(.97, 1, 64), new THREE.MeshBasicMaterial({ color: 0xffc070, transparent: true, opacity: .25, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; scene.add(m); G.lightMesh = m; }
-    const lc = lightCarrier(); if (lc) { G.lightMesh.position.set(lc.pos.x, .06, lc.pos.z); G.lightMesh.scale.setScalar(lightRadius()); } }
+    if (!G.lightMesh) { const m = new THREE.Mesh(new THREE.RingGeometry(.994, 1, 96), new THREE.MeshBasicMaterial({ color: 0xffc070, transparent: true, opacity: .09, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; scene.add(m); G.lightMesh = m; }
+    const lc = lightCarrier(); if (lc) { G.lightMesh.position.set(lc.pos.x, .06, lc.pos.z); G.lightMesh.scale.setScalar(lightRadius()); G.lightMesh.material.opacity = G.flare >= 1 ? .3 : .09; } }
   if (G.waveActive && G.spawnQ.length) { G.spawnT -= dt; if (G.spawnT <= 0) { const k = G.spawnQ.shift(); spawnEnemy(k); G.spawnT = Math.max(.25, .9 - G.wave * .02); } }
   const living = G.heroes.filter(h => h.alive);
   // heroes
@@ -692,7 +692,7 @@ function update(dt) {
     if (dist > reach) { tmp.copy(target).sub(e.pos).setY(0).normalize(); e.pos.addScaledVector(tmp, sp * dt); faceTo(e.inst.wrap, tmp, dt, 8); play(e.inst, e.clipW, { speed: Math.max(.6, sp / e.def.animSpeed) }); }
     else {
       tmp.copy(target).sub(e.pos); faceTo(e.inst.wrap, tmp, dt, 14);
-      if (e.atkCd <= 0) { e.atkCd = e.def.cd; play(e.inst, e.clipA, { loop: false, fade: .1 }); const dmg = e.dmg; const hh = th; after(e.def.hitT || .4, () => { if (!e.alive) return; if (hh) damageHero(hh, dmg); if (e.def.boss) ring(e.pos, 4, 0xff3b3b, .4), G.heroes.forEach(x => x.alive && x.pos.distanceTo(e.pos) < 4 && x !== hh && damageHero(x, dmg * .5)); }); }
+      if (e.atkCd <= 0) { e.atkCd = e.def.cd; play(e.inst, e.clipA, { loop: false, fade: .1 }); const dmg = e.dmg; const hh = th; e.swing = true; after(e.def.hitT || .4, () => { e.swing = false; if (!e.alive) return; if (hh) damageHero(hh, dmg); if (e.def.boss) ring(e.pos, 4, 0xff3b3b, .4), G.heroes.forEach(x => x.alive && x.pos.distanceTo(e.pos) < 4 && x !== hh && damageHero(x, dmg * .5)); }); }
       else if (e.inst.cur && e.inst.cur.isRunning && !e.inst.cur.isRunning()) play(e.inst, e.clipW);
     }
     e.inst.wrap.position.copy(e.pos);
