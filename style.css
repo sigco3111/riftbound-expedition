@@ -81,3 +81,4 @@ details{font-size:11px;color:#8e98b5;max-width:700px;margin-top:6px}
 #campBtn.ready{background:#2d5a2a;color:#fff;border-color:#8fe388;box-shadow:0 0 10px #6fd36a}
 #hubClose{position:sticky;bottom:8px;z-index:5;box-shadow:0 0 14px #000}
 #modal{padding-bottom:70px}
+.bagrow{display:flex;align-items:center;gap:8px;margin:4px 0;font-size:12px;text-align:left;width:min(560px,94vw);justify-content:space-between}.bagrow span{flex:1}.bagrow .warn{background:#7a1f1f;color:#fff}

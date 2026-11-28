@@ -445,15 +445,15 @@ function heroSkill(h) {
   const live = G.enemies.filter(e => e.alive);
   const hurt = G.heroes.filter(x => x.alive && x.hp < x.maxhp * .75);
   switch (sk.type) {
-    case 'barrier': if (live.some(e => e.pos.distanceTo(h.pos) < 6)) { G.heroes.forEach(x => x.shield = 4); ring(h.pos, 2.2, 0xffd36b); used = true; } break;
+    case 'barrier': if (live.some(e => e.pos.distanceTo(h.pos) < 6)) { G.heroes.forEach(x => x.shield = 4 * (h.skMul || 1)); ring(h.pos, 2.2, 0xffd36b); used = true; } break;
     case 'heal': if (hurt.length || G.lantern < G.lanternMax * .7) { G.heroes.forEach(x => x.alive && (x.hp = Math.min(x.maxhp, x.hp + sk.power * AT))); G.lantern = Math.min(G.lanternMax, G.lantern + sk.power * .4); ring(h.pos, 2.4, 0x58d68d); used = true; } break;
     case 'aoe': { const t = nearest(live, h.pos, 18); if (t) { const r = sk.r * S.aoe; ring(t.pos, r, sk.color || 0xb86bff, .5); const dmg = sk.power * AT * S.dmg; after(.25, () => G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < r && (damageEnemy(e, dmg), sk.slow && (e.slow = 2.5)))); used = true; } } break;
-    case 'pull': { const t = nearest(live, h.pos, 18); if (t) { ring(t.pos, sk.r * S.aoe, 0x9b6bdc, .6); G.enemies.forEach(e => { if (e.alive && !e.def.boss && e.pos.distanceTo(t.pos) < sk.r * S.aoe) { e.pos.lerp(t.pos, .8); e.slow = 3; } }); used = true; } } break;
+    case 'pull': { const t = nearest(live, h.pos, 18); if (t) { ring(t.pos, sk.r * S.aoe * (h.skMul || 1), 0x9b6bdc, .6); G.enemies.forEach(e => { if (e.alive && !e.def.boss && e.pos.distanceTo(t.pos) < sk.r * S.aoe * (h.skMul || 1)) { e.pos.lerp(t.pos, .8); e.slow = 3; } }); used = true; } } break;
     case 'turret': if (live.length) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, .9, 8), new THREE.MeshStandardMaterial({ color: sk.color || 0x4aa3df, emissive: sk.color || 0x4aa3df, emissiveIntensity: .4 })); const p = h.pos.clone().add(new THREE.Vector3((Math.random() - .5) * 3, 0, (Math.random() - .5) * 3)); m.position.set(p.x, .45, p.z); scene.add(m); G.turrets.push({ mesh: m, pos: p, life: 12, cd: 0, dmg: sk.power * AT * S.turret, blocker: sk.blocker }); used = true; } break;
     case 'trap': if (live.length) { const t = nearest(live, h.pos, 18); const m = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, .1, 12), new THREE.MeshBasicMaterial({ color: 0xe67e22 })); m.position.set(t.pos.x, .06, t.pos.z); scene.add(m); G.turrets.push({ mesh: m, pos: t.pos.clone(), life: 10, trap: true, dmg: sk.power * AT * S.turret, r: 3 }); used = true; } break;
     case 'volley': { const t = nearest(live, h.pos, 20); if (t) { const dmg = sk.power * AT * S.dmg * S.ranged; for (let i = 0; i < sk.n; i++) after(i * .08, () => { const tt = nearest(G.enemies.filter(e => e.alive), h.pos, 22); tt && shoot(h.pos, tt, dmg, h.def.color, e => damageEnemy(e, dmg)); }); used = true; } } break;
     case 'dash': { const t = nearest(live, h.pos, 20); if (t) { const dir = t.pos.clone().sub(h.pos).setY(0).normalize(); h.pos.copy(t.pos).addScaledVector(dir, -1.2); const dmg = sk.power * AT * S.dmg; G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < 2.8 && damageEnemy(e, dmg)); ring(t.pos, 2.8, 0xff5555, .3); used = true; } } break;
-    case 'aura': G.heroes.forEach(x => x.buffT = 5); ring(h.pos, 2.6, 0xffe08a, .6); used = !!live.length; if (used) G.bonus.atk *= 1; break;
+    case 'aura': G.heroes.forEach(x => x.buffT = 5 * (h.skMul || 1)); ring(h.pos, 2.6, 0xffe08a, .6); used = !!live.length; if (used) G.bonus.atk *= 1; break;
     case 'gold': G.earned += 0; used = false; h.skCd = 9999; break;
   }
   if (used) { try { fxSkill(h, sk, nearest(live, h.pos, 22)); } catch (e) { } h.skCd = sk.cd * S.cdr * G.bonus.cdr * (h.skCdMul || 1) * (h.gm ? h.gm.cdr : 1); if (h.clips.cast && sk.type !== 'dash') { h.busy = .5; play(h.inst, h.clips.cast, { loop: false, fade: .1 }); } }
@@ -508,7 +508,7 @@ function dropLoot(e) {
       h.gear[slot] = it; recalcHero(h); if (it.g === 3) G.relics++;
       G.loot.push(`<span style="color:${GRADES[it.g][2]}">${h.def.name}: ${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}</span>`);
       toast(`${h.def.name} ${itemName(it)} 획득`);
-    } else { const v = Math.round(it.pow * .6 * sm * Math.pow(1.02, G.wave)); G.bag = G.bag || []; it.hi = G.heroes.indexOf(h); if (G.bag.length < 60) G.bag.push(it); else { G.earned += v; toast('가방이 가득 차 장비가 판매되었습니다 (정비에서 정리 가능)'); } }
+    } else { const v = Math.round(it.pow * .6 * sm * Math.pow(1.02, G.wave)); G.bag = G.bag || []; it.hi = G.heroes.indexOf(h); G.bag.push(it); }
   }
 }
 // ---------- 은화로 캠프 자동 강화 ----------
@@ -533,9 +533,11 @@ function useTonic(dt) {
 }
 
 // ---------- 정비 허브: 언제든 열 수 있고, 열려 있는 동안 전투/행군/자동 타이머가 멈춘다 ----------
+const SK_TRAIN = { barrier: '방벽 지속시간 +8% (기본 4초)', aura: '오라 지속시간 +8% (기본 5초)', pull: '중력장 범위 +8%' };
+const skTrainable = h => h.def.skill.type !== 'gold';
 const trainCost = (h, k) => Math.round(35 * Math.pow(1.38, (h.tr || {})[k] | 0) * (k === 'hp' ? 1 : k === 'sk' ? 1.3 : 1.1));
 function train(h, k, free) {
-  h.tr = h.tr || {}; const n = h.tr[k] | 0; const c = trainCost(h, k); if (!free) { if (G.earned < c) return false; G.earned -= c; }
+  h.tr = h.tr || {}; const n = h.tr[k] | 0; const c = trainCost(h, k); if (k === 'sk' && !skTrainable(h)) return false; if (!free) { if (G.earned < c) return false; G.earned -= c; }
   h.tr[k] = n + 1; const r = (1 + .06 * (n + 1)) / (1 + .06 * n);
   if (k === 'atk') h.mul = (h.mul || 1) * r; else if (k === 'sk') { const q = (1 + .08 * (n + 1)) / (1 + .08 * n); h.skMul = (h.skMul || 1) * q; } else { h.maxhp *= r; h.hp *= r; } return true;
 }
@@ -548,7 +550,7 @@ let hubOpen = false;
 function campHint() { const b = $('campBtn'); if (b) { b.classList.add('ready'); b.textContent = '정비 ●'; } toast('정비 가능 (우상단 정비 버튼)'); }
 function openHub(onBack) {
   if (!G || G.over || hubOpen) return; const was = G.paused; if (!onBack && was) return;
-  hubOpen = true; G.paused = true; const m = $('modal'); m.classList.remove('hidden'); let tab = -1, pv = null;
+  hubOpen = true; G.paused = true; const m = $('modal'); m.classList.remove('hidden'); let tab = -1, pv = null, sellArm = -1;
   const gearTxt = it => it ? `${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}` : '없음';
   const close = () => { hubOpen = false; $('campBtn').classList.remove('ready'); $('campBtn').textContent = '정비'; if (onBack) onBack(); else { m.classList.add('hidden'); G.paused = false; } };
   const render = () => {
@@ -561,16 +563,16 @@ function openHub(onBack) {
     } else {
       const h = G.heroes[tab], g = h.gear || {};
       body = `<p><b>${h.def.name}</b> · 체력 ${Math.round(h.maxhp)} · 공격 배율 ${(h.mul || 1).toFixed(2)}</p>` +
-        ['atk', 'hp', 'sk'].map(k => `<button class="opt" data-tr="${k}" ${G.earned < trainCost(h, k) ? 'disabled' : ''}><b>${k === 'atk' ? '공격 훈련' : k === 'hp' ? '체력 훈련' : '스킬 수련'}</b> Lv ${(h.tr || {})[k] | 0} · ${k === 'atk' ? '기본 공격력 +6%' : k === 'hp' ? '체력 +6%' : (SKILL_DESC[h.def.skill.type] || '스킬').split(':')[0] + ' 위력 +8%'}<br>비용 ${trainCost(h, k)} 은화</button>`).join('') +
+        ['atk', 'hp', 'sk'].map(k => `<button class="opt" data-tr="${k}" ${G.earned < trainCost(h, k) || (k === 'sk' && !skTrainable(h)) ? 'disabled' : ''}><b>${k === 'atk' ? '공격 훈련' : k === 'hp' ? '체력 훈련' : '스킬 수련'}</b> Lv ${(h.tr || {})[k] | 0} · ${k === 'atk' ? '기본 공격력 +6%' : k === 'hp' ? '체력 +6%' : (SKILL_DESC[h.def.skill.type] || '스킬').split(':')[0] + ': ' + (SK_TRAIN[h.def.skill.type] || '스킬 위력 +8%')}<br>비용 ${trainCost(h, k)} 은화</button>`).join('') +
         `<p style="font-size:13px">장착: ${SLOTS.map(sl => sl[1] + ' ' + gearTxt(g[sl[0]])).join(' / ')}</p>` +
-        (G.bag || []).map((it, bi) => ({ it, bi })).map(x => `<div><button class="opt" style="display:inline-block;width:min(300px,64vw)" data-eq="${x.bi}"><b>${gearTxt(x.it)}</b><br>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍' : ''} → ${h.def.name} 장착 (현재 ${gearTxt(g[x.it.slot])}는 가방으로)</button><button class="ghost" data-sell="${x.bi}">판매 ${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('');
+        (() => { const L = (G.bag || []).map((it, bi) => ({ it, bi })).sort((a, b) => b.it.pow - a.it.pow), shown = L.slice(0, 40); return `<p style="font-size:13px">가방 ${L.length}개 (판매는 두 번 눌러야 확정됩니다)</p>` + shown.map(x => `<div class="bagrow"><span><b>${gearTxt(x.it)}</b><br>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍' : ''} · 현재 ${h.def.name}의 ${gearTxt(g[x.it.slot])}</span><button class="opt" style="width:auto" data-eq="${x.bi}">${h.def.name}에게 장착</button><button class="ghost${sellArm === x.bi ? ' warn' : ''}" data-sell="${x.bi}">${sellArm === x.bi ? '정말 판매? ' : '판매 '}${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('') + (L.length > shown.length ? `<p style="font-size:12px">나머지 ${L.length - shown.length}개는 위력이 낮은 순으로 숨김(판매하지 않고 보관됨)</p>` : ''); })();
     }
     m.innerHTML = `<h1>정비</h1><p>은화 <b>${Math.round(G.earned)}</b> · 열려 있는 동안 전투는 멈춰 있습니다</p><div>${tabs}</div>${body}<br><button class="mbtn" id="hubClose">닫고 계속</button>`;
-    m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; render(); });
+    m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; sellArm = -1; render(); });
     m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { buyCamp(b.dataset.c); render(); });
     m.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { train(G.heroes[tab], b.dataset.tr); render(); });
-    m.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { const h = G.heroes[tab], it = G.bag[+b.dataset.eq]; G.bag.splice(+b.dataset.eq, 1); h.gear = h.gear || {}; const cur = h.gear[it.slot]; if (cur) { cur.hi = tab; if (G.bag.length < 60) G.bag.push(cur); else { G.earned += Math.round(cur.pow * .6 * (G.silverMul || 1)); } } delete it.hi; h.gear[it.slot] = it; recalcHero(h); render(); });
-    m.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => { const it = G.bag[+b.dataset.sell]; if (!it) return; G.earned += Math.round(it.pow * .6 * (G.silverMul || 1)); G.bag.splice(+b.dataset.sell, 1); render(); });
+    m.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { const h = G.heroes[tab], it = G.bag[+b.dataset.eq]; G.bag.splice(+b.dataset.eq, 1); h.gear = h.gear || {}; const cur = h.gear[it.slot]; if (cur) { cur.hi = tab; G.bag.push(cur); } delete it.hi; h.gear[it.slot] = it; recalcHero(h); render(); });
+    m.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => { const bi = +b.dataset.sell, it = G.bag[bi]; if (!it) return; if (sellArm !== bi) { sellArm = bi; render(); return; } sellArm = -1; G.earned += Math.round(it.pow * .6 * (G.silverMul || 1)); G.bag.splice(+b.dataset.sell, 1); render(); });
     const rc = m.querySelector('[data-rec]'); if (rc) rc.onclick = () => { autoCamp(); render(); };
     const ac = $('acBtn'); if (ac) ac.onclick = () => { save.autoCamp = !save.autoCamp; persist(); render(); };
     $('hubClose').onclick = close;
@@ -652,7 +654,7 @@ function offerUpgrade() {
 // ---------- 저장 / 이어하기 (스테이지 시작 시점 스냅샷, 체력은 가득 채워 복원) ----------
 function snapshotRun() {
   if (!G || G.over || !G.heroes.length) return;
-  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, gear: G.heroes.map(h => h.gear || {}), train: G.heroes.map(h => ({ ...(h.tr || {}) })), bag: (G.bag || []).slice(0, 60) };
+  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, gear: G.heroes.map(h => h.gear || {}), train: G.heroes.map(h => ({ ...(h.tr || {}) })), bag: (G.bag || []).slice() };
   persist();
 }
 function restoreRun(R) {
@@ -662,7 +664,7 @@ function restoreRun(R) {
   G.bonus.atk *= 1 + .08 * G.camp.whet;
   { const k = 1 + .08 * G.camp.dress; G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
   G.heroes.forEach((h, i) => { h.gear = R.gear[i] || {}; recalcHero(h); });
-  G.bag = (R.bag || []).slice(0, 60); G.heroes.forEach((h, i) => { const t = (R.train || [])[i] || {}; for (let n = 0; n < (t.atk | 0); n++) train(h, 'atk', true); for (let n = 0; n < (t.hp | 0); n++) train(h, 'hp', true); for (let n = 0; n < (t.sk | 0); n++) train(h, 'sk', true); });
+  G.bag = (R.bag || []).slice(); G.heroes.forEach((h, i) => { const t = (R.train || [])[i] || {}; for (let n = 0; n < (t.atk | 0); n++) train(h, 'atk', true); for (let n = 0; n < (t.hp | 0); n++) train(h, 'hp', true); for (let n = 0; n < (t.sk | 0); n++) train(h, 'sk', true); });
   G.cardStack = {};
   const pool = cardPool();
   for (const id in R.cardStack) { const c = pool.find(x => x.id === id); if (c) for (let n = 0; n < R.cardStack[id]; n++) c.apply(G); }
