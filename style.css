@@ -22,7 +22,7 @@ html,body{margin:0;height:100%;background:#0b0f1a;color:#e8ecf5;font-family:syst
 #bossBar .bar{height:10px}#bossFill{background:#e74c3c!important}
 #stick{position:absolute;left:24px;bottom:120px;width:110px;height:110px;border-radius:50%;background:#ffffff14;border:2px solid #ffffff33;pointer-events:auto}
 #knob{position:absolute;left:35px;top:35px;width:40px;height:40px;border-radius:50%;background:#ffffff55}
-#toast{position:absolute;left:0;right:0;top:40%;text-align:center;font-size:26px;font-weight:800;color:#ffd36b;text-shadow:0 2px 8px #000;opacity:0;transition:opacity .4s}
+#toast{position:absolute;left:0;right:0;top:15%;text-align:center;font-size:26px;font-weight:800;color:#ffd36b;text-shadow:0 2px 8px #000;opacity:0;transition:opacity .4s}
 .panel{position:fixed;inset:0;overflow:auto;background:#0b0f1af2;padding:16px;display:flex;flex-direction:column;align-items:center}
 #modal{background:#0b0f1ad9;justify-content:flex-start}
 #modal>:first-child{margin-top:auto}

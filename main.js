@@ -400,10 +400,10 @@ function fireFlare() {
   const dmg = G.heroes.reduce((a, h) => a + ((h.def.dmg || 0) * G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.S.dmg), 0) * 1.5 * pf;
   G.enemies.forEach(e => { if (e.alive && Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < r) damageEnemy(e, dmg); });
   G.heroes.forEach(h => { if (h.alive) h.hp = Math.min(h.maxhp, h.hp + h.maxhp * .1); });
-  ring(c.pos, r, 0xffb860, .7); toast('등불 플레어!'); return true;
+  ring(c.pos, r, 0xffb860, .7); try { fxPlay('herald', c.pos, Math.max(1, r / 8)); fxPlay('sonic', c.pos, r / 6); } catch (e) { } toast('등불 플레어!'); return true;
 }
 function damageEnemy(e, dmg, noLight) {
-  if (!e.alive) return; if (!noLight && inLight(e.pos)) dmg *= 1 + .02 * G.camp.oil + .04; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg);
+  if (!e.alive) return; if (!noLight && inLight(e.pos)) dmg *= 1 + .02 * G.camp.oil + .04; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg); try { fxHit(e, dmg); } catch (er) { }
   if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; G.flare = Math.min(1, G.flare + (e.def.boss ? .5 : e.def.reward >= 15 ? .1 : .045) * (1 + .3 * cardLv('p:flare'))); const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; dropLoot(e); const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held * (G.silverMul || 1)); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
 }
 const dmgLayer = document.createElement('div'); dmgLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden'; document.body.appendChild(dmgLayer);
@@ -455,7 +455,7 @@ function heroSkill(h) {
     case 'aura': G.heroes.forEach(x => x.buffT = 5); ring(h.pos, 2.6, 0xffe08a, .6); used = !!live.length; if (used) G.bonus.atk *= 1; break;
     case 'gold': G.earned += 0; used = false; h.skCd = 9999; break;
   }
-  if (used) { h.skCd = sk.cd * S.cdr * G.bonus.cdr * (h.skCdMul || 1) * (h.gm ? h.gm.cdr : 1); if (h.clips.cast && sk.type !== 'dash') { h.busy = .5; play(h.inst, h.clips.cast, { loop: false, fade: .1 }); } }
+  if (used) { try { fxSkill(h, sk, nearest(live, h.pos, 22)); } catch (e) { } h.skCd = sk.cd * S.cdr * G.bonus.cdr * (h.skCdMul || 1) * (h.gm ? h.gm.cdr : 1); if (h.clips.cast && sk.type !== 'dash') { h.busy = .5; play(h.inst, h.clips.cast, { loop: false, fade: .1 }); } }
   else h.skCd = Math.min(h.skCd, 0) + .5;
 }
 
@@ -623,7 +623,7 @@ function restoreRun(R) {
 const TS = Math.max(1, parseInt(Q.get('ts') || '1', 10)); const clock = new THREE.Clock(); const tmp = new THREE.Vector3();
 function faceTo(wrap, dir, dt, rate = 12) { if (dir.lengthSq() < 1e-6) return; const a = Math.atan2(dir.x, dir.z); let d = a - wrap.rotation.y; d = Math.atan2(Math.sin(d), Math.cos(d)); wrap.rotation.y += d * Math.min(1, dt * rate); }
 // party walks as a column along the road, lantern bearer at the front
-function colHome(i) { return new THREE.Vector3(1.2 - i * 1.7, 0, (i % 2 ? .9 : -.9)); }
+function colHome(i) { return new THREE.Vector3(2.4 - i * 2.5, 0, [-1.7, 1.3, -.2, 2, -2.1][i % 5]); }
 function update(dt) {
   G.t += dt;
   // timers
@@ -722,13 +722,56 @@ function update(dt) {
   tickEmbers(G.t, dt);
   updateHUD();
 }
+
+// ---------- skill / hit effects (Effekseer runtime, CC0 effect files from the user's effekseer-ko fork; own integration code) ----------
+const FX = { ctx: null, fx: {}, ok: false, lastHit: 0, lastCast: {} };
+const FX_LIST = { // id: [file, load scale]
+  meteor: ['nextsoft/MagicMeteo', .5], thunder: ['nextsoft/MagicThunder', .5], cold: ['nextsoft/MagicCold', .5], tornado: ['nextsoft/MagicTornade', .5], heal: ['nextsoft/MagicHeal2', .5], powerup: ['nextsoft/PowerUp', .5], slash: ['nextsoft/Sword2', .5],
+  fireball: ['pierre-2/FireBall', .5], ember: ['pierre-2/Sword_Ember', .5], flame: ['pierre-1/Flame', .5], herald: ['pierre-1/Herald', .5], sonic: ['pierre-1/SonicBoom', .5], bolt: ['pierre-1/LightningStrike', .5],
+  hit: ['tktk/ToonHit', .4], hit2: ['andrewfm/hit_eff', .4], barrier: ['effekseer-1.6/Barrior01', .5], aura: ['effekseer-1.6/Aura01', .5]
+};
+async function initFx() {
+  try {
+    if (!window.effekseer || LOWQ) return;
+    await new Promise((ok, no) => window.effekseer.initRuntime('fx/effekseer.wasm', ok, () => no(new Error('fx runtime'))));
+    const gl = renderer.getContext(); FX.ctx = window.effekseer.createContext(); FX.ctx.init(gl, { instanceMaxCount: 4000, squareMaxCount: 12000 });
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false); gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    await Promise.all(Object.entries(FX_LIST).map(([id, [f, sc]]) => new Promise(res => { const e = FX.ctx.loadEffect('fx/effects/' + f + '.efk', sc, () => { FX.fx[id] = e; res(); }, () => res()); })));
+    FX.ok = Object.keys(FX.fx).length > 0;
+  } catch (err) { console.warn('fx disabled', err); }
+}
+function fxPlay(id, pos, scale = 1, speed = 1, y = 0) {
+  if (!FX.ok || !FX.fx[id]) return null;
+  const h = FX.ctx.play(FX.fx[id], pos.x, y, pos.z); if (scale !== 1) h.setScale(scale, scale, scale); if (speed !== 1) h.setSpeed(speed); FX.n = (FX.n || 0) + 1; return h;
+}
+function fxDraw(dt) {
+  if (!FX.ok) return; const c = FX.ctx; c.update(dt * 60 * (G && G.paused ? 0 : 1));
+  c.setProjectionMatrix(camera.projectionMatrix.elements); c.setCameraMatrix(camera.matrixWorldInverse.elements);
+  const gl = renderer.getContext(); gl.useProgram(null); c.draw(); renderer.resetState();
+}
+const SKILL_FX = { aoe: ['thunder', 1.3], pull: ['tornado', 1.1], heal: ['heal', 1.1], aura: ['powerup', 1], barrier: ['barrier', 1], dash: ['slash', 1.3], volley: ['fireball', .8], turret: ['flame', .8], trap: ['flame', 1] };
+function fxSkill(h, sk, target) {
+  const f = SKILL_FX[sk.type]; if (!f) return;
+  const now = performance.now(); if (now - (FX.lastCast[h.def.id] || 0) < 400) return; FX.lastCast[h.def.id] = now;
+  const onSelf = sk.type === 'heal' || sk.type === 'aura' || sk.type === 'barrier';
+  if (onSelf) { if (sk.type === 'heal') G.heroes.forEach(x => x.alive && fxPlay('heal', x.pos, .7)); else fxPlay(f[0], h.pos, f[1]); }
+  else if (target) fxPlay(f[0], target.pos, f[1] * (sk.type === 'aoe' ? Math.max(.8, (sk.r || 3) / 3) : 1));
+  if (sk.type === 'aoe' && FX.fx.meteor && target && sk.slow) fxPlay('cold', target.pos, 1.2);
+}
+function fxHit(e, dmg) {
+  const now = performance.now(); if (now - FX.lastHit < 90) return; FX.lastHit = now;
+  fxPlay(Math.random() < .5 ? 'hit' : 'hit2', e.pos, Math.min(1.8, .7 + dmg / 140), 1.4, 1);
+}
+
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), .05);
   if (G && !G.over && !G.paused && $('loading').classList.contains('hidden')) { const n = TS * save.speed; for (let i = 0; i < n && G && !G.over && !G.paused; i++) update(dt); }
   if (composer) composer.render(); else renderer.render(scene, camera);
+  fxDraw(dt);
 }
 buildWorld(0);
+initFx();
 if (!LOWQ) { composer = new EffectComposer(renderer); composer.setSize(innerWidth, innerHeight); composer.addPass(new RenderPass(scene, camera)); composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / (MOBILE ? 2 : 1), innerHeight / (MOBILE ? 2 : 1)), .5, .6, .9)); composer.addPass(new OutputPass()); }
 frame();
 renderMenu();
