@@ -18,3 +18,8 @@ Rat, Lava Golem and Skeleton Outlaw were converted to GLB (texture mapping fixed
 
 ## Rendering add-ons
 Bloom/output post-processing uses the official three.js r160 examples (EffectComposer, RenderPass, UnrealBloomPass, OutputPass, ShaderPass, MaskPass, Pass, CopyShader, LuminosityHighPassShader, OutputShader) under lib/addons/, MIT, same license as three.js (lib/THREE_LICENSE.txt). The ground, road, puddle and grass scenery in scenery.js is original code. The look is a free reinterpretation (blue moonlit night, warm lantern, wet road, fog); no Lanternfall code or assets are used.
+
+## Skill and hit effects
+- Effect player: Effekseer for WebGL 1.80.8 (fx/effekseer.min.js, fx/effekseer.wasm), MIT, (c) 2011 Effekseer Project.
+- Effect files (fx/effects/): the Sample folder of the official Effekseer 1.80.8 editor release, covered by its notice "All the licenses of these effects are CC-0" (fx/SAMPLES-LICENCE-readme.txt). Contributors named there: Pierre, NextSoft, AndrewFM, tktk, and the Effekseer Project. Copied unedited from the user's fork https://github.com/sigco3111/effekseer-ko (its LICENCE-NOTES.md records the licence check). Credit given as the notice requests.
+- The integration code (fxPass, skill/hit mapping in main.js) is original.
