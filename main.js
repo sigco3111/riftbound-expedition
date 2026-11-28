@@ -383,7 +383,7 @@ function dmgText(pos, dmg) {
 }
 function damageHero(h, dmg) {
   if (!h.alive) return; h.hp -= dmg * G.S.taken * (h.gm ? h.gm.ward : 1);
-  if (h.hp <= 0) { h.hp = 0; h.alive = false; G.st.downs++; play(h.inst, h.clips.die, { loop: false }); }
+  if (h.hp <= 0) { h.hp = 0; h.alive = false; h.downT = 20; G.st.downs++; play(h.inst, h.clips.die, { loop: false }); }
   else if (h.busy <= 0 && Math.random() < .15) { h.busy = .4; play(h.inst, h.clips.hit, { loop: false }); }
 }
 function after(t, fn) { G.timers.push({ t, fn }); }
@@ -578,7 +578,11 @@ function update(dt) {
   const liveEn = G.enemies.filter(e => e.alive);
   for (const h of G.heroes) {
     h.atkCd -= dt; h.skCd -= dt; h.busy -= dt; h.buffT = (h.buffT || 0) - dt; h.shield = (h.shield || 0) - dt;
-    if (!h.alive) { h.inst.mixer.update(dt); continue; }
+    if (!h.alive) {
+      h.inst.mixer.update(dt); h.downT = (h.downT == null ? 20 : h.downT) - dt;
+      if (h.downT <= 0 && G.state !== 'wipe' && living.length) { h.alive = true; h.hp = h.maxhp * .35; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); toast(h.def.name + ' 일어납니다'); }
+      continue;
+    }
     if (G.S.regen) h.hp = Math.min(h.maxhp, h.hp + G.S.regen * dt);
     const d = h.def; let move = new THREE.Vector3(); let speed = d.speed * G.bonus.speed;
     const tgt = nearest(liveEn, h.pos, 30);
