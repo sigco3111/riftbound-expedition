@@ -189,7 +189,7 @@ function computeSynergy(ids) {
 }
 
 // ---------- menu ----------
-const SKILL_DESC = { barrier: '등불 방벽: 파티 전체가 잠시 피해를 줄이는 방벽', heal: '치유: 파티와 등불을 회복', aoe: '범위 마법: 적 무리에 광역 피해와 감속', pull: '중력장: 적을 끌어당기고 늦춤', turret: '포탑 설치: 일정 시간 자동 사격', trap: '함정 설치: 밟으면 폭발하며 감속', volley: '연속 사격: 여러 발을 연달아 발사', dash: '돌진 타격: 적에게 뛰어들어 범위 피해', aura: '지휘 오라: 파티 공격 속도 +25% (5초)', gold: '보급' };
+const SKILL_DESC = { barrier: '등불 방벽: 4초간 파티 전체 받는 피해 -50%', heal: '치유: 파티와 등불을 회복', aoe: '범위 마법: 적 무리에 광역 피해와 감속', pull: '중력장: 적을 끌어당기고 늦춤', turret: '포탑 설치: 일정 시간 자동 사격', trap: '함정 설치: 밟으면 폭발하며 감속', volley: '연속 사격: 여러 발을 연달아 발사', dash: '돌진 타격: 적에게 뛰어들어 범위 피해', aura: '지휘 오라: 파티 공격 속도 +25% (5초)', gold: '보급' };
 let eraTab = 'all';
 function renderMenu() {
   $('contBtn').classList.toggle('hidden', !save.run); if (save.run) $('contBtn').textContent = `이어하기 (스테이지 ${save.run.wave} · Lv${save.run.level})`;
@@ -426,7 +426,7 @@ function dmgText(pos, dmg) {
   dmgLayer.appendChild(el); requestAnimationFrame(() => { el.style.transform = 'translateY(-26px)'; el.style.opacity = 0; }); setTimeout(() => el.remove(), 650);
 }
 function damageHero(h, dmg) {
-  if (!h.alive) return; h.hp -= dmg * G.S.taken * (h.gm ? h.gm.ward : 1);
+  if (!h.alive) return; h.hp -= dmg * G.S.taken * (h.gm ? h.gm.ward : 1) * (h.shield > 0 ? .5 : 1); // 등불 방벽: 지속시간 동안 받는 피해 50%(내 설계, 이전엔 배선 누락)
   if (h.hp <= 0) { h.hp = 0; h.alive = false; h.downT = 20; G.st.downs++; play(h.inst, h.clips.die, { loop: false }); }
   else if (h.busy <= 0 && Math.random() < .15) { h.busy = .4; play(h.inst, h.clips.hit, { loop: false }); }
 }
