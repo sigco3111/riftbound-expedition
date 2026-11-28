@@ -397,8 +397,8 @@ function inLight(pos) { const c = lightCarrier(); return !!c && Math.hypot(pos.x
 function fireFlare() {
   if (!G || G.over || G.paused || G.flare < 1 || G.heroes.every(h => !h.alive)) return false;
   G.flare = 0; const c = lightCarrier(), r = lightRadius(), pf = 1 + .3 * cardLv('p:flare');
-  const dmg = G.heroes.reduce((a, h) => a + (h.alive ? (h.def.dmg || 0) * G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.S.dmg : 0), 0) * 1.5 * pf;
-  G.enemies.forEach(e => { if (e.alive && Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < r) damageEnemy(e, dmg, true); });
+  const dmg = G.heroes.reduce((a, h) => a + ((h.def.dmg || 0) * G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.S.dmg), 0) * 1.5 * pf;
+  G.enemies.forEach(e => { if (e.alive && Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < r) damageEnemy(e, dmg); });
   G.heroes.forEach(h => { if (h.alive) h.hp = Math.min(h.maxhp, h.hp + h.maxhp * .1); });
   ring(c.pos, r, 0xffb860, .7); toast('등불 플레어!'); return true;
 }
@@ -551,7 +551,7 @@ function cardPool() {
     pool.push({ id: 'a:' + r, name: `${rn} 단련`, desc: `${rn} 역할 영웅 공격력 +18%(기본 공격과 스킬)`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => h.mul = (h.mul || 1) * 1.18) });
     pool.push({ id: 'h:' + r, name: `${rn} 강건`, desc: `${rn} 역할 영웅 체력 +25%`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => { h.maxhp *= 1.25; h.hp *= 1.25; }) });
   }
-  for (const t of [...new Set(G.heroes.map(h => h.def.skill.type))]) {
+  for (const t of [...new Set(G.heroes.map(h => h.def.skill.type))].filter(t => !['barrier', 'pull', 'aura', 'gold'].includes(t))) {
     const nm = (SKILL_DESC[t] || t).split(':')[0];
     pool.push({ id: 'sk:' + t, name: `${nm} 숙련`, desc: `'${nm}' 스킬 위력 +25%, 재사용 -10% (스킬 종류별 성장, 원작의 직업별 스킬 카드를 대체한 제 설계)`, apply: G => G.heroes.filter(h => h.def.skill.type === t).forEach(h => { h.skMul = (h.skMul || 1) * 1.25; h.skCdMul = (h.skCdMul || 1) * .9; }) });
   }
@@ -602,7 +602,7 @@ function offerUpgrade() {
 // ---------- 저장 / 이어하기 (스테이지 시작 시점 스냅샷, 체력은 가득 채워 복원) ----------
 function snapshotRun() {
   if (!G || G.over || !G.heroes.length) return;
-  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, gear: G.heroes.map(h => h.gear || {}) };
+  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, gear: G.heroes.map(h => h.gear || {}) };
   persist();
 }
 function restoreRun(R) {
@@ -616,6 +616,7 @@ function restoreRun(R) {
   const pool = cardPool();
   for (const id in R.cardStack) { const c = pool.find(x => x.id === id); if (c) for (let n = 0; n < R.cardStack[id]; n++) c.apply(G); }
   G.cardStack = { ...R.cardStack };
+  G.flare = Math.max(0, Math.min(1, +R.flare || 0));
   G.heroes.forEach(h => h.hp = h.maxhp);
 }
 // ---------- loop ----------
