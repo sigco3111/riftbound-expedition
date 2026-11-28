@@ -395,7 +395,7 @@ function spawnEnemy(key) {
   const d = ENEMIES[key]; const inst = makeInstance(d.gltf, d.h * 1.25, d.mode || 'y', d.yaw);
   const sx = 15 + Math.random() * 5; const pos = new THREE.Vector3(sx, 0, roadZ(G.W + sx) + (Math.random() - .5) * 5);
   const sc = d.boss ? 1600 * (.6 + G.wave * .13) / d.hp : 1 + G.wave * .09; // stage bosses share one strength curve, the model only changes the look
-  const early = d.boss ? 1 : 1 + .9 * Math.max(0, 6 - G.wave) / 5; // 초반 전투가 너무 짧아 스킬 연출이 안 보여서 1~5스테이지 일반 적 체력만 최대 +36%(내 설계)
+  const early = d.boss ? 1 : 1 + .9 * Math.max(0, 6 - G.wave) / 5; // 초반 전투가 너무 짧아 스킬 연출이 안 보여서 1~5스테이지 일반 적 체력만 +90%(스테이지 1) → 0%(스테이지 6)로 감소(내 설계)
   const e = { key, def: d, inst, pos, hp: d.hp * sc * early, maxhp: d.hp * sc * early, dmg: (d.boss ? 30 : d.dmg) * (1 + G.wave * .06), atkCd: 0, alive: true, clipW: findClip(inst.clips, d.walk), clipA: findClip(inst.clips, d.atk), dying: 0, hitFlash: 0 };
   inst.wrap.position.copy(pos); scene.add(inst.wrap); play(inst, e.clipW);
   G.enemies.push(e); if (d.boss) G.boss = e; return e;
@@ -416,7 +416,7 @@ function fireFlare() {
 }
 function damageEnemy(e, dmg, noLight) {
   if (!e.alive) return; if (!noLight && inLight(e.pos)) dmg *= 1 + .02 * G.camp.oil + .04; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg); try { fxHit(e, dmg); } catch (er) { }
-  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; G.flare = Math.min(1, G.flare + (e.def.boss ? .5 : e.def.reward >= 15 ? .1 : .045 * crowdK(e)) * (1 + .3 * cardLv('p:flare'))); const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; dropLoot(e); const gain = Math.ceil(e.def.reward * crowdK(e) * G.S.gold * G.bonus.gold * gb * held * (G.silverMul || 1)); G.earned += gain; addXp(Math.max(.4, e.def.reward * .9 * crowdK(e)) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
+  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; G.flare = Math.min(1, G.flare + (e.def.boss ? .5 : e.def.reward >= 15 ? .1 : .045 * crowdK(e)) * (1 + .3 * cardLv('p:flare'))); const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; dropLoot(e); const gRaw = e.def.reward * crowdK(e) * G.S.gold * G.bonus.gold * gb * held * (G.silverMul || 1); let gain; if (crowdK(e) === 1) gain = Math.ceil(gRaw); else { const tot = gRaw + (G.silverFrac || 0); gain = Math.floor(tot + 1e-9); G.silverFrac = tot - gain; }  /* 분수 보상은 잔여를 누적해 정수로 지급 */  G.earned += gain; addXp(Math.max(.4, e.def.reward * .9 * crowdK(e)) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
 }
 const dmgLayer = document.createElement('div'); dmgLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden'; document.body.appendChild(dmgLayer);
 function dmgText(pos, dmg) {
@@ -561,7 +561,7 @@ let hubOpen = false;
 function campHint() { const b = $('campBtn'); if (b) { b.classList.add('ready'); b.textContent = '정비 ●'; } toast('정비 가능 (우상단 정비 버튼)'); }
 function openHub(onBack) {
   if (!G || G.over || hubOpen) return; const was = G.paused; if (!onBack && was) return;
-  hubOpen = true; G.paused = true; const m = $('modal'); m.classList.remove('hidden'); let tab = -1, pv = null, sellArm = -1, bagSlot = 'all', bagMore = 40;
+  hubOpen = true; G.paused = true; const m = $('modal'); m.classList.remove('hidden'); let tab = -1, pv = null, sellArm = null, bagSlot = 'all', bagMore = 40;
   const gearTxt = it => it ? `${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}` : '없음';
   const close = () => { hubOpen = false; $('campBtn').classList.remove('ready'); $('campBtn').textContent = '정비'; if (onBack) onBack(); else { m.classList.add('hidden'); G.paused = false; } };
   const render = () => {
@@ -576,16 +576,16 @@ function openHub(onBack) {
       body = `<p><b>${h.def.name}</b> · 체력 ${Math.round(h.maxhp)} · 공격 배율 ${(h.mul || 1).toFixed(2)}</p>` +
         ['atk', 'hp', 'sk'].map(k => `<button class="opt" data-tr="${k}" ${G.earned < trainCost(h, k) || (k === 'sk' && !skTrainable(h)) ? 'disabled' : ''}><b>${k === 'atk' ? '공격 훈련' : k === 'hp' ? '체력 훈련' : '스킬 수련'}</b> Lv ${(h.tr || {})[k] | 0} · ${k === 'atk' ? '기본 공격력 +6%' : k === 'hp' ? '체력 +6%' : (SKILL_DESC[h.def.skill.type] || '스킬').split(':')[0] + ': ' + (SK_TRAIN[h.def.skill.type] || '스킬 위력 +8%')}<br>비용 ${trainCost(h, k)} 은화</button>`).join('') +
         `<p style="font-size:13px">장착: ${SLOTS.map(sl => sl[1] + ' ' + gearTxt(g[sl[0]])).join(' / ')}</p>` +
-        (() => { const all = G.bag || [], L = all.map((it, bi) => ({ it, bi })).filter(x => bagSlot === 'all' || x.it.slot === bagSlot).sort((a, b) => b.it.pow - a.it.pow), shown = L.slice(0, bagMore); return `<p style="font-size:13px">가방 ${all.length}개 (판매는 두 번 눌러야 확정됩니다)</p><div>${[['all', '전체'], ...SLOTS.map(x => [x[0], x[1]])].map(f => `<button class="ghost${bagSlot === f[0] ? ' warn2' : ''}" data-f="${f[0]}">${f[1]}</button>`).join(' ')}</div>` + shown.map(x => `<div class="bagrow"><span><b>${gearTxt(x.it)}</b><br>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍' : ''} · 현재 ${h.def.name}의 ${gearTxt(g[x.it.slot])}</span><button class="opt" style="width:auto" data-eq="${x.bi}">${h.def.name}에게 장착</button><button class="ghost${sellArm === x.bi ? ' warn' : ''}" data-sell="${x.bi}">${sellArm === x.bi ? '정말 판매? ' : '판매 '}${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('') + (L.length > shown.length ? `<button class="ghost" data-more="1">더 보기 (${L.length - shown.length}개 남음)</button>` : ''); })();
+        (() => { const all = G.bag || [], L = all.map((it, bi) => ({ it, bi })).filter(x => bagSlot === 'all' || x.it.slot === bagSlot).sort((a, b) => b.it.pow - a.it.pow), shown = L.slice(0, bagMore); return `<p style="font-size:13px">가방 ${all.length}개 (판매는 두 번 눌러야 확정됩니다)</p><div>${[['all', '전체'], ...SLOTS.map(x => [x[0], x[1]])].map(f => `<button class="ghost${bagSlot === f[0] ? ' warn2' : ''}" data-f="${f[0]}">${f[1]}</button>`).join(' ')}</div>` + shown.map(x => `<div class="bagrow"><span><b>${gearTxt(x.it)}</b><br>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍' : ''} · 현재 ${h.def.name}의 ${gearTxt(g[x.it.slot])}</span><button class="opt" style="width:auto" data-eq="${x.bi}">${h.def.name}에게 장착</button><button class="ghost${sellArm === x.it ? ' warn' : ''}" data-sell="${x.bi}">${sellArm === x.it ? '정말 판매? ' : '판매 '}${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('') + (L.length > shown.length ? `<button class="ghost" data-more="1">더 보기 (${L.length - shown.length}개 남음)</button>` : ''); })();
     }
     m.innerHTML = `<h1>정비</h1><p>은화 <b>${Math.round(G.earned)}</b> · 열려 있는 동안 전투는 멈춰 있습니다</p><div>${tabs}</div>${body}<div class="hubfoot"><button class="mbtn" id="hubClose">닫고 계속</button></div>`;
-    m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; sellArm = -1; render(); });
+    m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; sellArm = null; render(); });
     m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { buyCamp(b.dataset.c); render(); });
     m.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { train(G.heroes[tab], b.dataset.tr); render(); });
-    m.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { const h = G.heroes[tab], it = G.bag[+b.dataset.eq]; G.bag.splice(+b.dataset.eq, 1); h.gear = h.gear || {}; const cur = h.gear[it.slot]; if (cur) { cur.hi = tab; G.bag.push(cur); } delete it.hi; h.gear[it.slot] = it; recalcHero(h); render(); });
-    m.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => { const bi = +b.dataset.sell, it = G.bag[bi]; if (!it) return; if (sellArm !== bi) { sellArm = bi; render(); return; } sellArm = -1; G.earned += Math.round(it.pow * .6 * (G.silverMul || 1)); G.bag.splice(+b.dataset.sell, 1); render(); });
-    m.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { bagSlot = b.dataset.f; bagMore = 40; render(); });
-    const mo = m.querySelector('[data-more]'); if (mo) mo.onclick = () => { bagMore += 40; render(); };
+    m.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { sellArm = null; const h = G.heroes[tab], it = G.bag[+b.dataset.eq]; G.bag.splice(+b.dataset.eq, 1); h.gear = h.gear || {}; const cur = h.gear[it.slot]; if (cur) { cur.hi = tab; G.bag.push(cur); } delete it.hi; h.gear[it.slot] = it; recalcHero(h); render(); });
+    m.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => { const bi = +b.dataset.sell, it = G.bag[bi]; if (!it) return; if (sellArm !== it) { sellArm = it; render(); return; } sellArm = null; G.earned += Math.round(it.pow * .6 * (G.silverMul || 1)); G.bag.splice(+b.dataset.sell, 1); render(); });
+    m.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { bagSlot = b.dataset.f; bagMore = 40; sellArm = null; render(); });
+    const mo = m.querySelector('[data-more]'); if (mo) mo.onclick = () => { bagMore += 40; sellArm = null; render(); };
     const rc = m.querySelector('[data-rec]'); if (rc) rc.onclick = () => { autoCamp(); render(); };
     const ac = $('acBtn'); if (ac) ac.onclick = () => { save.autoCamp = !save.autoCamp; persist(); render(); };
     $('hubClose').onclick = close;
@@ -667,7 +667,7 @@ function offerUpgrade() {
 // ---------- 저장 / 이어하기 (스테이지 시작 시점 스냅샷, 체력은 가득 채워 복원) ----------
 function snapshotRun() {
   if (!G || G.over || !G.heroes.length) return;
-  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, gear: G.heroes.map(h => h.gear || {}), train: G.heroes.map(h => ({ ...(h.tr || {}) })), bag: (G.bag || []).slice() };
+  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, silverFrac: +(G.silverFrac || 0).toFixed(4), gear: G.heroes.map(h => h.gear || {}), train: G.heroes.map(h => ({ ...(h.tr || {}) })), bag: (G.bag || []).slice() };
   persist();
 }
 function restoreRun(R) {
@@ -677,7 +677,7 @@ function restoreRun(R) {
   G.bonus.atk *= 1 + .08 * G.camp.whet;
   { const k = 1 + .08 * G.camp.dress; G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
   G.heroes.forEach((h, i) => { h.gear = R.gear[i] || {}; recalcHero(h); });
-  G.bag = (R.bag || []).slice(); G.heroes.forEach((h, i) => { const t = (R.train || [])[i] || {}; for (let n = 0; n < (t.atk | 0); n++) train(h, 'atk', true); for (let n = 0; n < (t.hp | 0); n++) train(h, 'hp', true); for (let n = 0; n < (t.sk | 0); n++) train(h, 'sk', true); });
+  G.silverFrac = Math.max(0, Math.min(.999, +R.silverFrac || 0)); G.bag = (R.bag || []).slice(); G.heroes.forEach((h, i) => { const t = (R.train || [])[i] || {}; for (let n = 0; n < (t.atk | 0); n++) train(h, 'atk', true); for (let n = 0; n < (t.hp | 0); n++) train(h, 'hp', true); for (let n = 0; n < (t.sk | 0); n++) train(h, 'sk', true); });
   G.cardStack = {};
   const pool = cardPool();
   for (const id in R.cardStack) { const c = pool.find(x => x.id === id); if (c) for (let n = 0; n < R.cardStack[id]; n++) c.apply(G); }
