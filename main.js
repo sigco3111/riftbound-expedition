@@ -369,7 +369,7 @@ function spawnEnemy(key) {
 function nearest(list, p, maxd = 1e9) { let b = null, bd = maxd; for (const o of list) { if (o.alive === false) continue; const dd = o.pos.distanceTo(p); if (dd < bd) { bd = dd; b = o; } } return b; }
 function damageEnemy(e, dmg) {
   if (!e.alive) return; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg);
-  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.1, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
+  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
 }
 const dmgLayer = document.createElement('div'); dmgLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden'; document.body.appendChild(dmgLayer);
 function dmgText(pos, dmg) {
@@ -405,18 +405,18 @@ function heroAttack(h, tgt) {
   else after(.2, () => { if (!tgt.alive) return; damageEnemy(tgt, dmg); if (d.cleave) for (const e of G.enemies) if (e !== tgt && e.alive && e.pos.distanceTo(h.pos) < d.range + 1.2) damageEnemy(e, dmg * .5); });
 }
 function heroSkill(h) {
-  const sk = h.def.skill; const S = G.S; let used = false;
+  const sk = h.def.skill; const S = G.S; let used = false; const AT = G.bonus.atk * (h.mul || 1);
   const live = G.enemies.filter(e => e.alive);
   const hurt = G.heroes.filter(x => x.alive && x.hp < x.maxhp * .75);
   switch (sk.type) {
     case 'barrier': if (live.some(e => e.pos.distanceTo(h.pos) < 6)) { G.heroes.forEach(x => x.shield = 4); ring(h.pos, 2.2, 0xffd36b); used = true; } break;
-    case 'heal': if (hurt.length || G.lantern < G.lanternMax * .7) { G.heroes.forEach(x => x.alive && (x.hp = Math.min(x.maxhp, x.hp + sk.power * G.bonus.atk))); G.lantern = Math.min(G.lanternMax, G.lantern + sk.power * .4); ring(h.pos, 2.4, 0x58d68d); used = true; } break;
-    case 'aoe': { const t = nearest(live, h.pos, 18); if (t) { const r = sk.r * S.aoe; ring(t.pos, r, sk.color || 0xb86bff, .5); const dmg = sk.power * G.bonus.atk * S.dmg; after(.25, () => G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < r && (damageEnemy(e, dmg), sk.slow && (e.slow = 2.5)))); used = true; } } break;
+    case 'heal': if (hurt.length || G.lantern < G.lanternMax * .7) { G.heroes.forEach(x => x.alive && (x.hp = Math.min(x.maxhp, x.hp + sk.power * AT))); G.lantern = Math.min(G.lanternMax, G.lantern + sk.power * .4); ring(h.pos, 2.4, 0x58d68d); used = true; } break;
+    case 'aoe': { const t = nearest(live, h.pos, 18); if (t) { const r = sk.r * S.aoe; ring(t.pos, r, sk.color || 0xb86bff, .5); const dmg = sk.power * AT * S.dmg; after(.25, () => G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < r && (damageEnemy(e, dmg), sk.slow && (e.slow = 2.5)))); used = true; } } break;
     case 'pull': { const t = nearest(live, h.pos, 18); if (t) { ring(t.pos, sk.r * S.aoe, 0x9b6bdc, .6); G.enemies.forEach(e => { if (e.alive && !e.def.boss && e.pos.distanceTo(t.pos) < sk.r * S.aoe) { e.pos.lerp(t.pos, .8); e.slow = 3; } }); used = true; } } break;
-    case 'turret': if (live.length) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, .9, 8), new THREE.MeshStandardMaterial({ color: sk.color || 0x4aa3df, emissive: sk.color || 0x4aa3df, emissiveIntensity: .4 })); const p = h.pos.clone().add(new THREE.Vector3((Math.random() - .5) * 3, 0, (Math.random() - .5) * 3)); m.position.set(p.x, .45, p.z); scene.add(m); G.turrets.push({ mesh: m, pos: p, life: 12, cd: 0, dmg: sk.power * G.bonus.atk * S.turret, blocker: sk.blocker }); used = true; } break;
-    case 'trap': if (live.length) { const t = nearest(live, h.pos, 18); const m = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, .1, 12), new THREE.MeshBasicMaterial({ color: 0xe67e22 })); m.position.set(t.pos.x, .06, t.pos.z); scene.add(m); G.turrets.push({ mesh: m, pos: t.pos.clone(), life: 10, trap: true, dmg: sk.power * G.bonus.atk * S.turret, r: 3 }); used = true; } break;
-    case 'volley': { const t = nearest(live, h.pos, 20); if (t) { const dmg = sk.power * G.bonus.atk * S.dmg * S.ranged; for (let i = 0; i < sk.n; i++) after(i * .08, () => { const tt = nearest(G.enemies.filter(e => e.alive), h.pos, 22); tt && shoot(h.pos, tt, dmg, h.def.color, e => damageEnemy(e, dmg)); }); used = true; } } break;
-    case 'dash': { const t = nearest(live, h.pos, 20); if (t) { const dir = t.pos.clone().sub(h.pos).setY(0).normalize(); h.pos.copy(t.pos).addScaledVector(dir, -1.2); const dmg = sk.power * G.bonus.atk * S.dmg; G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < 2.8 && damageEnemy(e, dmg)); ring(t.pos, 2.8, 0xff5555, .3); used = true; } } break;
+    case 'turret': if (live.length) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, .9, 8), new THREE.MeshStandardMaterial({ color: sk.color || 0x4aa3df, emissive: sk.color || 0x4aa3df, emissiveIntensity: .4 })); const p = h.pos.clone().add(new THREE.Vector3((Math.random() - .5) * 3, 0, (Math.random() - .5) * 3)); m.position.set(p.x, .45, p.z); scene.add(m); G.turrets.push({ mesh: m, pos: p, life: 12, cd: 0, dmg: sk.power * AT * S.turret, blocker: sk.blocker }); used = true; } break;
+    case 'trap': if (live.length) { const t = nearest(live, h.pos, 18); const m = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, .1, 12), new THREE.MeshBasicMaterial({ color: 0xe67e22 })); m.position.set(t.pos.x, .06, t.pos.z); scene.add(m); G.turrets.push({ mesh: m, pos: t.pos.clone(), life: 10, trap: true, dmg: sk.power * AT * S.turret, r: 3 }); used = true; } break;
+    case 'volley': { const t = nearest(live, h.pos, 20); if (t) { const dmg = sk.power * AT * S.dmg * S.ranged; for (let i = 0; i < sk.n; i++) after(i * .08, () => { const tt = nearest(G.enemies.filter(e => e.alive), h.pos, 22); tt && shoot(h.pos, tt, dmg, h.def.color, e => damageEnemy(e, dmg)); }); used = true; } } break;
+    case 'dash': { const t = nearest(live, h.pos, 20); if (t) { const dir = t.pos.clone().sub(h.pos).setY(0).normalize(); h.pos.copy(t.pos).addScaledVector(dir, -1.2); const dmg = sk.power * AT * S.dmg; G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < 2.8 && damageEnemy(e, dmg)); ring(t.pos, 2.8, 0xff5555, .3); used = true; } } break;
     case 'aura': G.heroes.forEach(x => x.buffT = 5); ring(h.pos, 2.6, 0xffe08a, .6); used = !!live.length; if (used) G.bonus.atk *= 1; break;
     case 'gold': G.earned += 0; used = false; h.skCd = 9999; break;
   }
@@ -443,22 +443,35 @@ function addXp(x) { G.xp += x; let n = xpNeed(G.level); while (G.xp >= n) { G.xp
 // 레벨업 카드: 파티 공용 + 편성에 있는 역할별 카드. 같은 카드는 3번까지 중첩.
 function cardPool() {
   const pool = [];
-  UPGRADES.forEach(u => pool.push({ id: 'p:' + u.name, name: u.name, desc: u.desc, apply: u.apply }));
+  pool.push({ id: 'p:dmg', name: '날 선 칼날', desc: '파티 전체 공격력 +10%', apply: G => G.bonus.atk *= 1.1 });
+  pool.push({ id: 'p:hp', name: '단련', desc: '파티 전체 체력 +12%', apply: G => G.heroes.forEach(h => { h.maxhp *= 1.12; h.hp *= 1.12; }) });
+  pool.push({ id: 'p:haste', name: '빠른 행군', desc: '파티 전체 공격 속도 +7%', apply: G => G.bonus.rate *= 1.07 });
+  pool.push({ id: 'p:gold', name: '약탈꾼', desc: '획득 엠버 +25%', apply: G => G.bonus.gold *= 1.25 });
   const roles = [...new Set(G.heroes.map(h => h.def.role))];
   for (const r of roles) {
     const rn = G.heroes.find(h => h.def.role === r).def.roleName;
-    pool.push({ id: 'a:' + r, name: `${rn} 단련`, desc: `${rn} 역할 영웅 공격력 +25%`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => h.mul = (h.mul || 1) * 1.25) });
+    pool.push({ id: 'a:' + r, name: `${rn} 단련`, desc: `${rn} 역할 영웅 공격력 +18%(기본 공격과 스킬)`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => h.mul = (h.mul || 1) * 1.18) });
     pool.push({ id: 'h:' + r, name: `${rn} 강건`, desc: `${rn} 역할 영웅 체력 +25%`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => { h.maxhp *= 1.25; h.hp *= 1.25; }) });
   }
-  pool.push({ id: 'p:xp', name: '배움의 불꽃', desc: '경험치 +20%', apply: G => G.bonus.xp = (G.bonus.xp || 1) * 1.2 });
+  pool.push({ id: 'p:xp', name: '배움의 불꽃', desc: '경험치 +15%', apply: G => G.bonus.xp = (G.bonus.xp || 1) * 1.15 });
   return pool.filter(c => (G.cardStack[c.id] || 0) < 3);
+}
+function countdown(m, secs, fn, label) {
+  let t = secs, stopped = false; const el = m.querySelector('#cd');
+  const iv = setInterval(() => { if (stopped) return; t--; if (el) el.textContent = `${t}초 뒤 ${label}`; if (t <= 0) { clearInterval(iv); fn(); } }, 1000);
+  m.onpointerdown = () => { stopped = true; if (el) el.textContent = ''; };
+  return () => { clearInterval(iv); m.onpointerdown = null; };
 }
 function openCards() {
   if (G.pendingCards <= 0) return; G.pendingCards--; G.paused = true;
   const pool = cardPool().sort(() => Math.random() - .5).slice(0, 3); if (!pool.length) { G.paused = false; return; }
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>레벨 ${G.level}</h1><p>강화 카드를 하나 고르세요</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}${G.cardStack[u.id] ? ' (' + (G.cardStack[u.id] + 1) + '단계)' : ''}</b><br>${u.desc}</button>`).join('');
-  m.querySelectorAll('.opt').forEach(b => b.onclick = () => { const c = pool[+b.dataset.i]; c.apply(G); G.cardStack[c.id] = (G.cardStack[c.id] || 0) + 1; m.classList.add('hidden'); G.paused = false; });
+  let rec = 0, bs = -1; pool.forEach((c, i) => { const sc = (c.id.startsWith('p:') ? 1.2 : 1) + Math.random() * .8 + (/^(p:dmg|p:hp|a:)/.test(c.id) ? .3 : 0); if (sc > bs) { bs = sc; rec = i; } });
+  m.innerHTML = `<h1>레벨 ${G.level}</h1><p>강화 카드를 하나 고르세요 (화면을 누르면 자동 선택이 멈춥니다)</p>` + pool.map((u, i) => `<button class="opt" data-i="${i}"><b>${u.name}${G.cardStack[u.id] ? ' (' + (G.cardStack[u.id] + 1) + '단계)' : ''}${i === rec ? ' (추천)' : ''}</b><br>${u.desc}</button>`).join('') + '<p id="cd" style="opacity:.7;font-size:12px"></p>';
+  let done = false, stop = null;
+  const pick = i => { if (done) return; done = true; stop(); const c = pool[i]; c.apply(G); G.cardStack[c.id] = (G.cardStack[c.id] || 0) + 1; m.classList.add('hidden'); G.paused = false; };
+  stop = countdown(m, 6, () => pick(rec), '추천 카드 선택');
+  m.querySelectorAll('.opt').forEach(b => b.onclick = () => pick(+b.dataset.i));
 }
 // 보스 뒤 위험도: 전멸 횟수, 최저 체력, 소요 시간으로 계산
 function danger(next) {
@@ -479,9 +492,9 @@ function offerUpgrade() {
   const dg = danger(true), rec = stewardPush();
   const m = $('modal'); m.classList.remove('hidden');
   m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>다음 구간 위험도: <b style="color:${dg[2]}">${dg[0]}</b> · 레벨 ${G.level}</p><button class="opt" data-go="1"><b>전진${rec ? ' (추천)' : ''}</b><br>다음 스테이지로 나아갑니다</button><button class="opt" data-go="0"><b>같은 구간 반복${rec ? '' : ' (추천)'}</b><br>경험치·엠버 80%, 장비와 경험치를 더 모읍니다</button><p id="cd" style="opacity:.7;font-size:12px"></p>`;
-  let done = false, t = 7; const cd = m.querySelector('#cd');
-  const go = push => { if (done) return; done = true; clearInterval(iv); m.classList.add('hidden'); G.paused = false; if (push) { G.holdCount = 0; nextWave(); } else { G.holdCount++; G.state = 'init'; beginStage(); } };
-  const iv = setInterval(() => { t--; if (cd) cd.textContent = `${t}초 뒤 추천 선택으로 진행`; if (t <= 0) go(rec); }, 1000);
+  let done = false, stop = null;
+  const go = push => { if (done) return; done = true; stop(); m.classList.add('hidden'); G.paused = false; if (push) { G.holdCount = 0; nextWave(); } else { G.holdCount++; G.state = 'init'; beginStage(); } };
+  stop = countdown(m, 7, () => go(rec), '추천 선택으로 진행');
   m.querySelectorAll('.opt').forEach(b => b.onclick = () => go(b.dataset.go === '1'));
 }
 
