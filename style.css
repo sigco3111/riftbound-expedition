@@ -195,3 +195,7 @@ summary{cursor:pointer;text-align:center}
 #story .dlg .nx{position:absolute;right:16px;bottom:8px;font-size:11px;color:var(--dim)}
 @media (max-width:640px){#story .dlg{padding:14px;gap:10px}#story .dlg .pt.lg{width:52px;height:52px}#story .dlg p{font-size:14px}}
 body.cine #hud{display:none}
+
+#story.beat{background:linear-gradient(180deg,transparent 40%,rgba(3,4,10,.72) 100%)}
+#story.beat .vig{display:none}
+#story.beat .skip{top:auto;right:max(16px,calc(50% - 430px));bottom:calc(3.5% + 118px)}

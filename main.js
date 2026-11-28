@@ -254,12 +254,34 @@ async function openDetail(h) {
 }
 // ---------- story scenes (staged in the real game scene; own dialogue) ----------
 const STORY = {
+  // who: 영웅 id(없으면 파티 첫 영웅이 대신 말함), null: 나레이션. 모든 대사는 자체 작성.
   intro: [
     { who: null, t: '세 시대가 한 하늘 아래 겹친 밤. 갈라진 하늘 틈, 균열에서 쏟아진 어둠이 모든 불빛을 삼키고 있었다.' },
-    { who: 0, t: '마지막 등불이 아직 켜져 있다. 이 불이 꺼지면 돌아갈 길도 같이 사라진다.' },
-    { who: 2, t: '성벽이 있던 자리에 철골이 서 있고, 그 위로 별이 부서지고 있어요. 대체 몇 개의 세계가 섞인 거죠?' },
-    { who: 3, t: '균열의 가장자리는 세 가지 빛깔로 울고 있어. 전부 따라가 보면 중심에 닿을 거야.' },
-    { who: 1, t: '재가 된 왕국의 왕으로서 명한다. 등불을 지켜라. 그리고 균열의 끝까지 가자.' },
+    { who: 'w_medieval', t: '마지막 등불이 아직 켜져 있다. 이 불이 꺼지면 돌아갈 길도 같이 사라진다.' },
+    { who: 'm_farmer', t: '성벽이 있던 자리에 철골이 서 있고, 그 위로 별이 부서지고 있어요. 대체 몇 개의 세계가 섞인 거죠?' },
+    { who: 'w_soldier', t: '균열의 가장자리는 세 가지 빛깔로 울고 있어. 전부 따라가 보면 중심에 닿을 거야.' },
+    { who: 'm_king', t: '재가 된 왕국의 왕으로서 명한다. 등불을 지켜라. 그리고 균열의 끝까지 가자.' },
+  ],
+  // 장면 전환: 보스 등장 전, 첫 길목 등불을 밝힌 뒤. 각 장면은 한 번만 나온다(save.story[key]).
+  boss_ogre_pre: [
+    { who: null, t: '길 한가운데, 균열에서 떨어진 거인이 돌 같은 어깨를 들썩이며 일어섰다.' },
+    { who: 'w_medieval', t: '저건 성문을 부수던 놈이다. 등불 앞에서 물러서면 이 길은 끝이야.' },
+    { who: 'w_soldier', t: '머리부터 노릴게요. 앞은 부탁해요.' },
+  ],
+  boss_ogre_post: [
+    { who: null, t: '거인이 쓰러진 자리에서 재가 흩어지고, 길목의 등불이 조용히 다시 불을 받았다.' },
+    { who: 'm_farmer', t: '불이 따뜻해졌어요. 다들 상처를 보여 주세요, 이번엔 제대로 감아 드릴게요.' },
+    { who: 'm_king', t: '쉬는 건 이 불이 켜져 있는 동안뿐이다. 날이 밝기 전에 다음 길목까지 간다.' },
+  ],
+  boss_trex_pre: [
+    { who: null, t: '땅이 울렸다. 어느 먼 시대의 심연에서 올라온 이빨이 어둠 속에서 번뜩였다.' },
+    { who: 'w_witch', t: '저 아이는 이쪽 세계 것이 아니야. 균열이 이런 것까지 끌어당기고 있어.' },
+    { who: 'w_medieval', t: '무엇이든 불빛 앞에서는 똑같다. 간다.' },
+  ],
+  boss_mech_pre: [
+    { who: null, t: '무너진 철골 사이에서 폐허의 기계가 눈을 떴다. 오래 꺼져 있던 붉은 빛이 다시 들어왔다.' },
+    { who: 'w_soldier', t: '아직 움직이다니. 이 균열은 시대를 가리지 않는군요.' },
+    { who: 'm_king', t: '쇠로 된 적이라도 등불은 꺼뜨리지 못한다. 진형을 유지하라.' },
   ],
 };
 let CINE = null;
@@ -284,18 +306,26 @@ function cineEnd() {
 function showStory(key, done) {
   const lines = STORY[key]; let i = 0;
   const party = G.heroes.map(h => h.def);
-  const el = document.createElement('div'); el.id = 'story';
+  const beat = key !== 'intro';   // 장면 전환(보스 전후): 3D 연출 없이 게임 화면 위에 대사만. 일러스트 파일은 요청하지 않는다.
+  const el = document.createElement('div'); el.id = 'story'; if (beat) el.className = 'beat';
   el.innerHTML = `<div class="vig"></div><button class="skip" id="stSkip">건너뛰기</button><div class="dlg" id="stDlg"></div>`;
-  document.body.appendChild(el); cineStart();
+  document.body.appendChild(el); if (!beat) cineStart();
   fillPortraits(party.map(d => d.id));
-  const end = () => { el.classList.add('out'); setTimeout(() => el.remove(), 350); cineEnd(); done(); };
+  let ended = false;
+  const end = () => { if (ended) return; ended = true; el.classList.add('out'); setTimeout(() => el.remove(), 350); cineEnd(); done(); };
   const draw = () => {
-    const l = lines[i], d = $('stDlg'), h = l.who !== null && l.who !== undefined ? (party[l.who] || party[0]) : null;
+    const l = lines[i], d = $('stDlg'), h = l.who ? (party.find(p => p.id === l.who) || party[0]) : null;
     d.innerHTML = `${h ? ptHtml(h.id, 'lg') : '<span class="pt lg nar">◈</span>'}<div class="tx"><b class="${h ? '' : 'nar'}" ${h ? `style="color:${ERA[h.era].color}"` : ''}>${h ? h.name : '나레이션'}</b><p>${l.t}</p></div><span class="nx">${i + 1} / ${lines.length} · 클릭하여 계속</span>`;
     d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
   };
   el.onclick = e => { if (e.target.id === 'stSkip') return end(); if (++i >= lines.length) end(); else draw(); };
   draw();
+}
+// 한 번만 나오는 장면(보스 전후). 사용자가 건너뛰어도 본 것으로 저장한다. ?nostory=1 로 끌 수 있다(시험용).
+function storyBeat(key, then) {
+  if (!STORY[key] || Q.get('nostory') || (save.story && save.story[key]) || document.getElementById('story')) { then && then(); return; }
+  G.storyOpen = true;   // paused는 정비/카드 창과 겹치므로 따로 둔다
+  showStory(key, () => { save.story = Object.assign(save.story || {}, { [key]: 1 }); persist(); if (G) G.storyOpen = false; then && then(); });
 }
 $('startBtn').onclick = () => {
   if (save.run) {
@@ -430,20 +460,21 @@ function stageFlow(dt) {
     G.marching = true; advance(dt);
     if (G.W >= G.nextW) {
       if (G.packNo < 3) { G.spawnQ = [...G.packs[G.packNo]]; G.packNo++; G.spawnT = 0; G.waveActive = true; G.state = 'fight'; G.stT = 0; }
-      else { G.spawnQ = [bossOf(G.wave)]; G.spawnT = 0; G.waveActive = true; G.state = 'boss'; G.stT = 0; toast(`${ENEMIES[bossOf(G.wave)].name} 등장!`); }
+      else { G.spawnQ = [bossOf(G.wave)]; G.spawnT = 0; G.waveActive = true; G.state = 'boss'; G.stT = 0; toast(`${ENEMIES[bossOf(G.wave)].name} 등장!`); storyBeat('boss_' + bossOf(G.wave) + '_pre'); }
     }
   } else if (G.state === 'fight' || G.state === 'boss') {
     if (!alive.some(e => e.pos.x < 12) && (alive.length || G.spawnQ.length)) { G.marching = true; advance(dt); }
     if (!alive.length && !G.spawnQ.length) {
       G.heroes.forEach(h => { if (!h.alive) { h.alive = true; h.hp = h.maxhp * .4; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); } else h.hp = Math.min(h.maxhp, h.hp + h.maxhp * Math.min(.4, .03 + .025 * G.camp.dress)); });
       G.waveActive = false; G.stT = 0; G.packsDone++; if (save.autoCamp) autoCamp(); campHint();
-      if (G.state === 'boss') { G.boss = null; G.packsDone = 4; G.state = 'relight'; G.maxStage = Math.max(G.maxStage, G.wave); toast('길목의 등불에 불을 붙입니다'); G.heroes.forEach(h => { h.alive = true; h.hp = h.maxhp; h.inst.wrap.visible = true; }); G.tonics = maxTonics(); }
+      if (G.state === 'boss') { G.boss = null; G.packsDone = 4; G.state = 'relight'; G.maxStage = Math.max(G.maxStage, G.wave); toast('길목의 등불에 불을 붙입니다'); G.postBeat = false; G.heroes.forEach(h => { h.alive = true; h.hp = h.maxhp; h.inst.wrap.visible = true; }); G.tonics = maxTonics(); }
       else { G.state = 'breather'; }
     }
   } else if (G.state === 'breather') {
     if (G.stT > 1) { G.state = 'walk'; G.nextW = G.W + 8 + Math.random() * 3; G.stT = 0; }
   } else if (G.state === 'relight') {
-    if (G.stT > 2.2) { G.state = 'choice'; offerUpgrade(); }
+    if (G.stT > 1.3 && !G.postBeat) { G.postBeat = true; storyBeat('boss_' + bossOf(G.wave) + '_post'); }   // 보스가 사라진 뒤
+    if (G.stT > 2.2 && !G.storyOpen) { G.state = 'choice'; offerUpgrade(); }
   } else if (G.state === 'wipe') {
     if (G.stT > 2) {
       if (G.flames <= 0) { end(); return; }
@@ -965,7 +996,7 @@ function fxHit(e, dmg) {
 function frame() {
   requestAnimationFrame(frame);
   const dt = Math.min(clock.getDelta(), .05);
-  if (G && !G.over && !G.paused && $('loading').classList.contains('hidden')) { const n = TS * save.speed; for (let i = 0; i < n && G && !G.over && !G.paused; i++) update(dt); }
+  if (G && !G.over && !G.paused && !G.storyOpen && $('loading').classList.contains('hidden')) { const n = TS * save.speed; for (let i = 0; i < n && G && !G.over && !G.paused && !G.storyOpen; i++) update(dt); }
   if (CINE) CINE.tick(dt);
   if (composer) composer.render(); else renderer.render(scene, camera);
 }
