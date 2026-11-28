@@ -201,13 +201,13 @@ function renderMenu() {
     const unlocked = save.unlocked.includes(h.id);
     const d = document.createElement('div');
     d.className = `hc e-${h.era}` + (selected.includes(h.id) ? ' sel' : '') + (unlocked ? '' : ' lock');
-    d.innerHTML = `<b>${h.name}</b><span class="era" style="color:${ERA[h.era].color}">${ERA[h.era].name}</span> · ${h.roleName}<br>${unlocked ? h.blurb : `🔒 ${h.cost} 엠버`}<span class="info">i</span>${selected.includes(h.id) ? '<span class="pick">편성 ' + (selected.indexOf(h.id) + 1) + '</span>' : ''}`;
+    d.innerHTML = `<b>${h.name}</b><span class="era" style="color:${ERA[h.era].color}">${ERA[h.era].name}</span><span class="role">${h.roleName}</span><p class="bl">${unlocked ? h.blurb : `<span class="lk">잠김 · ${h.cost} 엠버</span>`}</p><span class="info">i</span>${selected.includes(h.id) ? '<span class="pick">편성 ' + (selected.indexOf(h.id) + 1) + '</span>' : ''}`;
     d.querySelector('.info').onclick = e => { e.stopPropagation(); openDetail(h); };
     d.onclick = () => toggleHero(h);
     grid.appendChild(d);
   });
   const slots = $('slots'); slots.innerHTML = '';
-  for (let i = 0; i < 5; i++) { const id = selected[i]; const d = document.createElement('div'); d.className = 'slot' + (id ? ' full' : ''); d.textContent = id ? heroById[id].name : `빈 슬롯 ${i + 1}`; if (id) { d.style.borderColor = ERA[heroById[id].era].color; d.onclick = () => { selected = selected.filter(x => x !== id); renderMenu(); }; } slots.appendChild(d); }
+  for (let i = 0; i < 5; i++) { const id = selected[i]; const d = document.createElement('div'); d.className = 'slot' + (id ? ' full' : ''); d.textContent = id ? heroById[id].name : `빈 슬롯 ${i + 1}`; if (id) { d.style.setProperty('--era', ERA[heroById[id].era].color); d.onclick = () => { selected = selected.filter(x => x !== id); renderMenu(); }; } slots.appendChild(d); }
   const S = computeSynergy(selected);
   $('preview').innerHTML = selected.length ? (S.chips.length ? S.chips.map(c => `<span class="chip">${c}</span>`).join(' ') : '활성 시너지 없음 (같은 시대 2명 이상이면 발동)') : '영웅을 눌러 파티에 넣으세요. i 버튼은 상세/3D 보기.';
   const b = $('startBtn'); b.disabled = selected.length < 1; b.textContent = selected.length === 5 ? '출정' : `출정 (${selected.length}/5명)`;
@@ -287,7 +287,7 @@ function cleanup() {
 function buildPartyUI() {
   const p = $('party'); p.innerHTML = '';
   G.heroes.forEach(h => {
-    const c = document.createElement('div'); c.className = 'card'; c.style.borderColor = ERA[h.def.era].color;
+    const c = document.createElement('div'); c.className = 'card'; c.style.setProperty('--era', ERA[h.def.era].color);
     c.innerHTML = `<div class="n">${h.def.name}</div><div class="bar"><div class="hp"></div></div><div class="bar cd"><div class="cd"></div></div>`;
     h.ui = c; p.appendChild(c);
   });
@@ -565,20 +565,24 @@ function openHub(onBack) {
   const gearTxt = it => it ? `${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}` : '없음';
   const close = () => { hubOpen = false; $('campBtn').classList.remove('ready'); $('campBtn').textContent = '정비'; if (onBack) onBack(); else { m.classList.add('hidden'); G.paused = false; } };
   const render = () => {
-    const tabs = ['<button class="ghost" data-t="-1">' + (tab === -1 ? '[파티]' : '파티') + '</button>'].concat(G.heroes.map((h, i) => `<button class="ghost" data-t="${i}">${tab === i ? '[' + h.def.name + ']' : h.def.name}</button>`)).join(' ');
+    const railBtn = (t, label, sub, era) => `<button class="rt${tab === t ? ' on' : ''}" data-t="${t}" ${era ? `style="--era:${era}"` : ''}><b>${label}</b>${sub ? `<em>${sub}</em>` : ''}</button>`;
+    const tabs = railBtn(-1, '파티 정비', '공용 강화', '') + G.heroes.map((h, i) => railBtn(i, h.def.name, `${ERA[h.def.era].name} · ${h.def.roleName}`, ERA[h.def.era].color)).join('');
+    const row = (attr, key, title, sub, cost, dis) => `<button class="opt" ${attr}="${key}" ${dis ? 'disabled' : ''}><span class="ot"><b>${title}</b><em>${sub}</em></span><span class="cost">${cost}<small>은화</small></span></button>`;
     let body = '';
     if (tab === -1) {
-      body = CAMP.map(c => `<button class="opt" data-c="${c[0]}" ${G.earned < campCost(c[0]) ? 'disabled' : ''}><b>${c[1]}</b> Lv ${G.camp[c[0]]} · ${c[2]}<br>비용 ${campCost(c[0])} 은화</button>`).join('');
       pv = planCamp();
-      body += `<p style="font-size:13px">추천 정비: ${pv.plan.length ? '<br>' + pv.plan.join('<br>') + `<br><b>합계 ${pv.total} 은화</b> (보유 ${Math.round(G.earned)})` : '지금은 살 수 있는 것이 없음'}</p><button class="opt" data-rec="1" ${pv.plan.length ? '' : 'disabled'}><b>추천대로 정비</b><br>위 목록을 그대로 구매합니다</button><button class="ghost" id="acBtn">자동 정비: ${save.autoCamp ? '켜짐(팩 종료마다 추천 구매)' : '꺼짐'}</button>`;
+      body = `<h3>공용 강화</h3><div class="list">` + CAMP.map(c => row('data-c', c[0], `${c[1]} <i class="lv">Lv ${G.camp[c[0]]}</i>`, c[2], campCost(c[0]), G.earned < campCost(c[0]))).join('') + `</div>` +
+        `<h3>추천 정비</h3><div class="rec">${pv.plan.length ? pv.plan.map(x => `<div>${x}</div>`).join('') + `<div class="tot">합계 <b>${pv.total}</b> 은화 <span>보유 ${Math.round(G.earned)}</span></div>` : '<div class="mute">지금은 살 수 있는 것이 없음</div>'}</div>` +
+        `<div class="btnrow"><button class="mbtn" data-rec="1" ${pv.plan.length ? '' : 'disabled'}>추천대로 정비</button><button class="ghost" id="acBtn">자동 정비: ${save.autoCamp ? '켜짐 (팩 종료마다 추천 구매)' : '꺼짐'}</button></div>`;
     } else {
       const h = G.heroes[tab], g = h.gear || {};
-      body = `<p><b>${h.def.name}</b> · 체력 ${Math.round(h.maxhp)} · 공격 배율 ${(h.mul || 1).toFixed(2)}</p>` +
-        ['atk', 'hp', 'sk'].map(k => `<button class="opt" data-tr="${k}" ${G.earned < trainCost(h, k) || (k === 'sk' && !skTrainable(h)) ? 'disabled' : ''}><b>${k === 'atk' ? '공격 훈련' : k === 'hp' ? '체력 훈련' : '스킬 수련'}</b> Lv ${(h.tr || {})[k] | 0} · ${k === 'atk' ? '기본 공격력 +6%' : k === 'hp' ? '체력 +6%' : (SKILL_DESC[h.def.skill.type] || '스킬').split(':')[0] + ': ' + (SK_TRAIN[h.def.skill.type] || '스킬 위력 +8%')}<br>비용 ${trainCost(h, k)} 은화</button>`).join('') +
-        `<p style="font-size:13px">장착: ${SLOTS.map(sl => sl[1] + ' ' + gearTxt(g[sl[0]])).join(' / ')}</p>` +
-        (() => { const all = G.bag || [], L = all.map((it, bi) => ({ it, bi })).filter(x => bagSlot === 'all' || x.it.slot === bagSlot).sort((a, b) => b.it.pow - a.it.pow), shown = L.slice(0, bagMore); return `<p style="font-size:13px">가방 ${all.length}개 (판매는 두 번 눌러야 확정됩니다)</p><div>${[['all', '전체'], ...SLOTS.map(x => [x[0], x[1]])].map(f => `<button class="ghost${bagSlot === f[0] ? ' warn2' : ''}" data-f="${f[0]}">${f[1]}</button>`).join(' ')}</div>` + shown.map(x => `<div class="bagrow"><span><b>${gearTxt(x.it)}</b><br>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍' : ''} · 현재 ${h.def.name}의 ${gearTxt(g[x.it.slot])}</span><button class="opt" style="width:auto" data-eq="${x.bi}">${h.def.name}에게 장착</button><button class="ghost${sellArm === x.it ? ' warn' : ''}" data-sell="${x.bi}">${sellArm === x.it ? '정말 판매? ' : '판매 '}${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('') + (L.length > shown.length ? `<button class="ghost" data-more="1">더 보기 (${L.length - shown.length}개 남음)</button>` : ''); })();
+      const trn = k => row('data-tr', k, `${k === 'atk' ? '공격 훈련' : k === 'hp' ? '체력 훈련' : '스킬 수련'} <i class="lv">Lv ${(h.tr || {})[k] | 0}</i>`, k === 'atk' ? '기본 공격력 +6%' : k === 'hp' ? '체력 +6%' : (SKILL_DESC[h.def.skill.type] || '스킬').split(':')[0] + ': ' + (SK_TRAIN[h.def.skill.type] || '스킬 위력 +8%'), trainCost(h, k), G.earned < trainCost(h, k) || (k === 'sk' && !skTrainable(h)));
+      body = `<div class="hero-head" style="--era:${ERA[h.def.era].color}"><div><h2>${h.def.name}</h2><span class="era">${ERA[h.def.era].name} · ${h.def.roleName}</span></div><dl class="stats"><div><dt>체력</dt><dd>${Math.round(h.maxhp)}</dd></div><div><dt>공격 배율</dt><dd>${(h.mul || 1).toFixed(2)}</dd></div></dl></div>` +
+        `<h3>장비</h3><div class="gslots">${SLOTS.map(sl => { const it = g[sl[0]]; return `<div class="gslot${it ? '' : ' empty'}"><span class="sn">${sl[1]}</span>${it ? `<b>${itemName(it)}</b><i>+${it.pow}%${it.spT ? ' · ' + it.spT : ''}</i>` : '<b>비어 있음</b>'}</div>`; }).join('')}</div>` +
+        `<h3>훈련</h3><div class="list">${['atk', 'hp', 'sk'].map(trn).join('')}</div>` +
+        (() => { const all = G.bag || [], L = all.map((it, bi) => ({ it, bi })).filter(x => bagSlot === 'all' || x.it.slot === bagSlot).sort((a, b) => b.it.pow - a.it.pow), shown = L.slice(0, bagMore); return `<h3>가방 <span class="mute">${all.length}개 · 판매는 두 번 눌러야 확정됩니다</span></h3><div class="flt">${[['all', '전체'], ...SLOTS.map(x => [x[0], x[1]])].map(f => `<button class="fl${bagSlot === f[0] ? ' on' : ''}" data-f="${f[0]}">${f[1]}</button>`).join('')}</div>` + shown.map(x => `<div class="bagrow"><span><b>${gearTxt(x.it)}</b><em>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍 · ' : ''}현재 ${h.def.name}: ${gearTxt(g[x.it.slot])}</em></span><button class="sm" data-eq="${x.bi}">장착</button><button class="sm ghost${sellArm === x.it ? ' warn' : ''}" data-sell="${x.bi}">${sellArm === x.it ? '정말 판매? ' : '판매 '}${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('') + (L.length > shown.length ? `<button class="ghost" data-more="1">더 보기 (${L.length - shown.length}개 남음)</button>` : ''); })();
     }
-    m.innerHTML = `<h1>정비</h1><p>은화 <b>${Math.round(G.earned)}</b> · 열려 있는 동안 전투는 멈춰 있습니다</p><div>${tabs}</div>${body}<div class="hubfoot"><button class="mbtn" id="hubClose">닫고 계속</button></div>`;
+    m.innerHTML = `<div class="hub"><header class="hubhead"><div><h1>정비</h1><p class="note">열려 있는 동안 전투는 멈춰 있습니다</p></div><div class="silver"><span>은화</span><b>${Math.round(G.earned)}</b></div></header><div class="hubgrid"><nav class="rail">${tabs}</nav><section class="pane">${body}</section></div><div class="hubfoot"><button class="mbtn" id="hubClose">닫고 계속</button></div></div>`;
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; sellArm = null; render(); });
     m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { buyCamp(b.dataset.c); render(); });
     m.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { train(G.heroes[tab], b.dataset.tr); render(); });
