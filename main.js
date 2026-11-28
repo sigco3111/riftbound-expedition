@@ -725,7 +725,7 @@ function offerUpgrade() {
     const locked = HEROES.filter(h => !save.unlocked.includes(h.id)).slice(0, 3);
     locked.forEach(h => save.unlocked.push(h.id)); persist();
     const zn = ZONES[(G.wave / 5 - 1) % 5];
-    extra += `<p style="color:#ffd36b">구역 클리어: ${zn.name}.${locked.length ? '<br>영웅 해금: ' + locked.map(h => h.name).join(', ') : ''}</p>`;
+    extra += `<p class="acc">구역 클리어: ${zn.name}.${locked.length ? '<br>영웅 해금: ' + locked.map(h => h.name).join(', ') : ''}</p>`;
   }
   const dg = danger(true), rec = stewardPush();
   const m = $('modal'); m.classList.remove('hidden');

@@ -176,3 +176,4 @@ summary{cursor:pointer;text-align:center}
 @media (max-width:640px){.hero-head .pt.xl{width:60px;height:60px}.rt .pt{width:32px;height:32px}}
 .endrow{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}
 #modal{padding-bottom:max(28px,calc(16px + env(safe-area-inset-bottom)))}
+.acc{color:var(--accent)}
