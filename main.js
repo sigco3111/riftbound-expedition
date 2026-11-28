@@ -552,7 +552,7 @@ function end(win) {
   const render = () => {
     m.innerHTML = `<h1>등불이 꺼졌습니다</h1><p>도달 스테이지 ${G.maxStage} · 레벨 ${G.level} · 처치 ${G.kills} · 유물 ${G.relics} · 획득 엠버 ${gain}</p><p>보유 엠버 <b>${save.embers}</b> (영구 강화: 다음 런부터 계속 적용)</p>` +
       BOONS.map(b => { const lv = boonLv(b[0]), mx = lv >= b[4]; return `<button class="opt" data-b="${b[0]}" ${mx || save.embers < boonCost(b[0]) ? 'disabled' : ''}><b>${b[1]}</b> ${lv}/${b[4]}<br>${b[2]} · ${mx ? '최대' : '비용 ' + boonCost(b[0])}</button>`; }).join('') +
-      '<br><button class="mbtn" id="again">다시 출정</button><br><button class="ghost" id="arBtn"></button> <button class="ghost" id="tomenu">영웅 선택으로</button><p id="cd" style="opacity:.7;font-size:12px"></p>';
+      '<br><button class="mbtn" id="again">다시 출정</button><div class="endrow"><button class="ghost" id="arBtn"></button><button class="ghost" id="tomenu">영웅 선택으로</button></div><p id="cd" style="opacity:.7;font-size:12px;margin:10px 0 0"></p>';
     const ar = $('arBtn'); ar.textContent = '자동 재도전: ' + (save.autoRetry ? '켜짐' : '꺼짐'); ar.onclick = e => { e.stopPropagation(); save.autoRetry = !save.autoRetry; persist(); render(); if (save.autoRetry) armRetry(); else if (retryStop) retryStop(); };
     m.querySelectorAll('[data-b]').forEach(el => el.onclick = () => { const id = el.dataset.b, c = boonCost(id); if (save.embers >= c && boonLv(id) < BOONS.find(x => x[0] === id)[4]) { save.embers -= c; save.boons[id] = boonLv(id) + 1; persist(); render(); } });
     $('again').onclick = () => { if (retryStop) retryStop(); startGame(); }; $('tomenu').onclick = () => { m.classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden'); cleanup(); renderMenu(); };
