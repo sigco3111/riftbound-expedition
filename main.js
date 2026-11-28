@@ -744,12 +744,14 @@ function fxPlay(id, pos, scale = 1, speed = 1, y = 0) {
   if (!FX.ok || !FX.fx[id]) return null;
   const h = FX.ctx.play(FX.fx[id], pos.x, y, pos.z); if (scale !== 1) h.setScale(scale, scale, scale); if (speed !== 1) h.setSpeed(speed); FX.n = (FX.n || 0) + 1; return h;
 }
-function fxDraw(dt) {
-  if (!FX.ok) return; const c = FX.ctx; c.update(dt * 60 * (G && G.paused ? 0 : 1));
-  c.setProjectionMatrix(camera.projectionMatrix.elements); c.setCameraMatrix(camera.matrixWorldInverse.elements);
-  const gl = renderer.getContext(); gl.useProgram(null); c.draw(); renderer.resetState();
-}
-const SKILL_FX = { aoe: ['thunder', 1.3], pull: ['tornado', 1.1], heal: ['heal', 1.1], aura: ['powerup', 1], barrier: ['barrier', 1], dash: ['slash', 1.3], volley: ['fireball', .8], turret: ['flame', .8], trap: ['flame', 1] };
+const fxPass = { enabled: true, needsSwap: false, clear: false, renderToScreen: false, isPass: true, setSize() { }, dispose() { },
+  render(r, wb, rb, delta) {
+    if (!FX.ok) return; const c = FX.ctx; const dt = Math.min(delta || .016, .05);
+    c.update(dt * 60 * (G && G.paused ? 0 : 1));
+    r.setRenderTarget(rb); c.setProjectionMatrix(camera.projectionMatrix.elements); c.setCameraMatrix(camera.matrixWorldInverse.elements);
+    const gl = r.getContext(); gl.bindVertexArray(null); gl.useProgram(null); c.draw(); r.resetState();
+  } };
+const SKILL_FX = { aoe: ['thunder', .6], pull: ['tornado', .7], heal: ['heal', 1.1], aura: ['powerup', 1], barrier: ['barrier', 1], dash: ['slash', .7], volley: ['fireball', .6], turret: ['flame', .8], trap: ['flame', 1] };
 function fxSkill(h, sk, target) {
   const f = SKILL_FX[sk.type]; if (!f) return;
   const now = performance.now(); if (now - (FX.lastCast[h.def.id] || 0) < 400) return; FX.lastCast[h.def.id] = now;
@@ -768,11 +770,10 @@ function frame() {
   const dt = Math.min(clock.getDelta(), .05);
   if (G && !G.over && !G.paused && $('loading').classList.contains('hidden')) { const n = TS * save.speed; for (let i = 0; i < n && G && !G.over && !G.paused; i++) update(dt); }
   if (composer) composer.render(); else renderer.render(scene, camera);
-  fxDraw(dt);
 }
 buildWorld(0);
 initFx();
-if (!LOWQ) { composer = new EffectComposer(renderer); composer.setSize(innerWidth, innerHeight); composer.addPass(new RenderPass(scene, camera)); composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / (MOBILE ? 2 : 1), innerHeight / (MOBILE ? 2 : 1)), .5, .6, .9)); composer.addPass(new OutputPass()); }
+if (!LOWQ) { composer = new EffectComposer(renderer); composer.setSize(innerWidth, innerHeight); composer.addPass(new RenderPass(scene, camera)); composer.addPass(fxPass); composer.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / (MOBILE ? 2 : 1), innerHeight / (MOBILE ? 2 : 1)), .5, .6, .9)); composer.addPass(new OutputPass()); }
 frame();
 renderMenu();
 window.__dbg = () => G; // dev
