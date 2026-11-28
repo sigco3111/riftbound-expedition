@@ -73,3 +73,6 @@ details{font-size:11px;color:#8e98b5;max-width:700px;margin-top:6px}
 #speedBtn,#contBtn{background:#27314b;color:#ffd36b;border:1px solid #4a5780;border-radius:8px;padding:6px 10px;font-size:13px}
 #contBtn{font-size:15px;padding:10px 14px;margin-right:8px}
 #contBtn.hidden{display:none}
+
+#flareBtn{background:#27314b;color:#ffd36b;border:1px solid #4a5780;border-radius:8px;padding:6px 10px;font-size:13px}
+#flareBtn.ready{background:#7a3b10;color:#fff;border-color:#ffb860;box-shadow:0 0 12px #ff9a3c}

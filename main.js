@@ -249,7 +249,7 @@ async function startGame(resume) {
   if (G) cleanup();
   if (R) selected = R.party.filter(id => heroById[id]);
   const S = computeSynergy(selected);
-  G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, camp: { whet: 0, dress: 0, oil: 0, tonic: 0 }, tonics: 2, loot: [], relics: 0, maxStage: 0, silverMul: 1, xp: 0, level: 1, pendingCards: 0, cardStack: {}, holdCount: 0, st: { downs: 0, minHp: 1, t: 0 }, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null };
+  G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, camp: { whet: 0, dress: 0, oil: 0, tonic: 0 }, tonics: 2, loot: [], relics: 0, maxStage: 0, silverMul: 1, xp: 0, level: 1, pendingCards: 0, cardStack: {}, holdCount: 0, st: { downs: 0, minHp: 1, t: 0 }, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null, flare: 0 };
   for (let i = 0; i < selected.length; i++) {
     const def = heroById[selected[i]]; const gltf = await loadModel(def.file);
     const inst = makeInstance(gltf, 1.75, 'y', 0);
@@ -271,6 +271,7 @@ async function startGame(resume) {
   beginStage();
 }
 function cleanup() {
+  if (G.lightMesh) scene.remove(G.lightMesh);
   [...G.heroes.map(h => h.inst.wrap), ...G.enemies.map(e => e.inst.wrap), ...G.proj.map(p => p.mesh), ...G.fx.map(f => f.mesh), ...G.turrets.map(t => t.mesh)].forEach(o => scene.remove(o));
   G = null;
 }
@@ -285,6 +286,7 @@ function buildPartyUI() {
 }
 function toast(t) { const e = $('toast'); e.textContent = t; e.style.opacity = 1; clearTimeout(toast.h); toast.h = setTimeout(() => e.style.opacity = 0, 1600); }
 function updateHUD() {
+  $('flareBtn').textContent = G.flare >= 1 ? '플레어 발사!' : `플레어 ${Math.floor((G.flare || 0) * 100)}%`; $('flareBtn').classList.toggle('ready', G.flare >= 1);
   $('wave').textContent = G.wave; $('kills').textContent = G.kills; $('embers').textContent = G.earned;
   $('lanternFill').style.width = Math.min(100, G.packsDone / 4 * 100) + '%';
   $('lanternTxt').textContent = `${ZONES[Math.max(0, Math.floor((G.wave - 1) / 5)) % 5].name} · 불꽃 ×${G.flames} · ${Math.min(G.packNo, 3)}/3 무리${G.packsDone >= 4 ? ' · 보스 격파' : ''} · Lv${G.level} (${Math.floor(G.xp)}/${xpNeed(G.level)})`;
@@ -293,6 +295,7 @@ function updateHUD() {
   if (G.boss && G.boss.alive) { $('bossBar').classList.remove('hidden'); $('bossName').textContent = G.boss.def.name; $('bossFill').style.width = Math.max(0, G.boss.hp / G.boss.maxhp * 100) + '%'; } else $('bossBar').classList.add('hidden');
 }
 $('modeBtn').onclick = () => { manual = !manual; };
+$('flareBtn').onclick = () => { fireFlare(); };
 $('speedBtn').onclick = () => { save.speed = save.speed === 1 ? 2 : save.speed === 2 ? 4 : 1; persist(); $('speedBtn').textContent = save.speed + '배속'; };
 $('speedBtn').textContent = save.speed + '배속';
 addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') { manual = !manual; e.preventDefault(); } });
@@ -386,9 +389,22 @@ function spawnEnemy(key) {
   G.enemies.push(e); if (d.boss) G.boss = e; return e;
 }
 function nearest(list, p, maxd = 1e9) { let b = null, bd = maxd; for (const o of list) { if (o.alive === false) continue; const dd = o.pos.distanceTo(p); if (dd < bd) { bd = dd; b = o; } } return b; }
-function damageEnemy(e, dmg) {
-  if (!e.alive) return; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg);
-  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; dropLoot(e); const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held * (G.silverMul || 1)); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
+// ---------- 등불 반경 / 램프유 / 플레어 (원작 규칙을 참고한 독립 구현) ----------
+const lightCarrier = () => G.heroes.find(h => h.alive) || G.heroes[0];
+const cardLv = id => (G.cardStack && G.cardStack[id]) || 0;
+const lightRadius = () => 9 * (1 + .06 * G.camp.oil + .15 * cardLv('p:light')) * (.72 + .0933 * G.flames);
+function inLight(pos) { const c = lightCarrier(); return !!c && Math.hypot(pos.x - c.pos.x, pos.z - c.pos.z) < lightRadius(); }
+function fireFlare() {
+  if (!G || G.over || G.paused || G.flare < 1 || G.heroes.every(h => !h.alive)) return false;
+  G.flare = 0; const c = lightCarrier(), r = lightRadius(), pf = 1 + .3 * cardLv('p:flare');
+  const dmg = G.heroes.reduce((a, h) => a + (h.alive ? (h.def.dmg || 0) * G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.S.dmg : 0), 0) * 1.5 * pf;
+  G.enemies.forEach(e => { if (e.alive && Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < r) damageEnemy(e, dmg, true); });
+  G.heroes.forEach(h => { if (h.alive) h.hp = Math.min(h.maxhp, h.hp + h.maxhp * .1); });
+  ring(c.pos, r, 0xffb860, .7); toast('등불 플레어!'); return true;
+}
+function damageEnemy(e, dmg, noLight) {
+  if (!e.alive) return; if (!noLight && inLight(e.pos)) dmg *= 1 + .02 * G.camp.oil + .04; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg);
+  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; G.flare = Math.min(1, G.flare + (e.def.boss ? .5 : e.def.reward >= 15 ? .1 : .045) * (1 + .3 * cardLv('p:flare'))); const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; dropLoot(e); const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held * (G.silverMul || 1)); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
 }
 const dmgLayer = document.createElement('div'); dmgLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden'; document.body.appendChild(dmgLayer);
 function dmgText(pos, dmg) {
@@ -424,7 +440,7 @@ function heroAttack(h, tgt) {
   else after(.2, () => { if (!tgt.alive) return; damageEnemy(tgt, dmg); if (d.cleave) for (const e of G.enemies) if (e !== tgt && e.alive && e.pos.distanceTo(h.pos) < d.range + 1.2) damageEnemy(e, dmg * .5); });
 }
 function heroSkill(h) {
-  const sk = h.def.skill; const S = G.S; let used = false; const AT = G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk * h.gm.skill : 1);
+  const sk = h.def.skill; const S = G.S; let used = false; const AT = G.bonus.atk * (h.mul || 1) * (h.skMul || 1) * (h.gm ? h.gm.atk * h.gm.skill : 1);
   const live = G.enemies.filter(e => e.alive);
   const hurt = G.heroes.filter(x => x.alive && x.hp < x.maxhp * .75);
   switch (sk.type) {
@@ -439,7 +455,7 @@ function heroSkill(h) {
     case 'aura': G.heroes.forEach(x => x.buffT = 5); ring(h.pos, 2.6, 0xffe08a, .6); used = !!live.length; if (used) G.bonus.atk *= 1; break;
     case 'gold': G.earned += 0; used = false; h.skCd = 9999; break;
   }
-  if (used) { h.skCd = sk.cd * S.cdr * G.bonus.cdr * (h.gm ? h.gm.cdr : 1); if (h.clips.cast && sk.type !== 'dash') { h.busy = .5; play(h.inst, h.clips.cast, { loop: false, fade: .1 }); } }
+  if (used) { h.skCd = sk.cd * S.cdr * G.bonus.cdr * (h.skCdMul || 1) * (h.gm ? h.gm.cdr : 1); if (h.clips.cast && sk.type !== 'dash') { h.busy = .5; play(h.inst, h.clips.cast, { loop: false, fade: .1 }); } }
   else h.skCd = Math.min(h.skCd, 0) + .5;
 }
 
@@ -495,13 +511,13 @@ function dropLoot(e) {
   }
 }
 // ---------- 은화로 캠프 자동 강화 ----------
-const CAMP = [['whet', '숫돌', '공격력', 8, 45, 1], ['dress', '붕대', '체력', 8, 45, 1.05], ['tonic', '탕약', '탕약 개수와 회복량', 1, 70, 1.7]];
+const CAMP = [['whet', '숫돌', '공격력', 8, 45, 1], ['dress', '붕대', '체력', 8, 45, 1.05], ['oil', '램프유', '등불 반경과 빛 속 회복/피해', 6, 60, 1.5], ['tonic', '탕약', '탕약 개수와 회복량', 1, 70, 1.7]];
 const campCost = id => { const c = CAMP.find(x => x[0] === id); return Math.round(c[4] * Math.pow(1.42, G.camp[id])); };
 function buyCamp(id) {
   const c = CAMP.find(x => x[0] === id), n = G.camp[id]; if (G.earned < campCost(id)) return false; G.earned -= campCost(id); G.camp[id]++;
   if (id === 'whet') G.bonus.atk *= (1 + .08 * (n + 1)) / (1 + .08 * n);
   else if (id === 'dress') { const k = (1 + .08 * (n + 1)) / (1 + .08 * n); G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
-  else if (id === 'oil') G.bonus.cdr *= (1 + .06 * n) / (1 + .06 * (n + 1));
+  else if (id === 'oil') { /* 등불 반경/빛 속 효과는 G.camp.oil에서 직접 계산 */ }
   else G.tonics = Math.min(maxTonics(), G.tonics + 1);
   toast(`캠프: ${c[1]} ${G.camp[id]}`);
 }
@@ -526,12 +542,18 @@ function cardPool() {
   pool.push({ id: 'p:dmg', name: '날 선 칼날', desc: '파티 전체 공격력 +10%', apply: G => G.bonus.atk *= 1.1 });
   pool.push({ id: 'p:hp', name: '단련', desc: '파티 전체 체력 +12%', apply: G => G.heroes.forEach(h => { h.maxhp *= 1.12; h.hp *= 1.12; }) });
   pool.push({ id: 'p:haste', name: '빠른 행군', desc: '파티 전체 공격 속도 +7%', apply: G => G.bonus.rate *= 1.07 });
+  pool.push({ id: 'p:light', name: '밝은 등불', desc: '등불 반경 +15%', apply: G => {} });
+  pool.push({ id: 'p:flare', name: '가득 찬 저장고', desc: '플레어 충전 +30%, 위력 +30%', apply: G => {} });
   pool.push({ id: 'p:gold', name: '약탈꾼', desc: '획득 은화 +25%', apply: G => G.bonus.gold *= 1.25 });
   const roles = [...new Set(G.heroes.map(h => h.def.role))];
   for (const r of roles) {
     const rn = G.heroes.find(h => h.def.role === r).def.roleName;
     pool.push({ id: 'a:' + r, name: `${rn} 단련`, desc: `${rn} 역할 영웅 공격력 +18%(기본 공격과 스킬)`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => h.mul = (h.mul || 1) * 1.18) });
     pool.push({ id: 'h:' + r, name: `${rn} 강건`, desc: `${rn} 역할 영웅 체력 +25%`, apply: G => G.heroes.filter(h => h.def.role === r).forEach(h => { h.maxhp *= 1.25; h.hp *= 1.25; }) });
+  }
+  for (const t of [...new Set(G.heroes.map(h => h.def.skill.type))]) {
+    const nm = (SKILL_DESC[t] || t).split(':')[0];
+    pool.push({ id: 'sk:' + t, name: `${nm} 숙련`, desc: `'${nm}' 스킬 위력 +25%, 재사용 -10% (스킬 종류별 성장, 원작의 직업별 스킬 카드를 대체한 제 설계)`, apply: G => G.heroes.filter(h => h.def.skill.type === t).forEach(h => { h.skMul = (h.skMul || 1) * 1.25; h.skCdMul = (h.skCdMul || 1) * .9; }) });
   }
   pool.push({ id: 'p:xp', name: '배움의 불꽃', desc: '경험치 +15%', apply: G => G.bonus.xp = (G.bonus.xp || 1) * 1.15 });
   return pool.filter(c => (G.cardStack[c.id] || 0) < 3);
@@ -608,6 +630,14 @@ function update(dt) {
   // spawning
   CEN.set(0, 0, roadZ(G.W)); stageFlow(dt); useTonic(dt);
   { G.st.t += dt; const ht = G.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0) / Math.max(1, G.heroes.reduce((a, h) => a + h.maxhp, 0)); if (ht < G.st.minHp) G.st.minHp = ht; if (G.pendingCards > 0 && !G.paused && (G.state === 'walk' || G.state === 'breather')) openCards(); }
+  { const live = G.enemies.filter(e => e.alive);
+    if (live.length) G.flare = Math.min(1, G.flare + dt * .012 * (1 + .3 * cardLv('p:flare')));
+    if (!manual && G.flare >= 1 && live.length && G.heroes.some(h => h.alive)) {
+      const c = lightCarrier(), inR = live.filter(e => Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < lightRadius()).length, ph = G.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0) / Math.max(1, G.heroes.reduce((a, h) => a + h.maxhp, 0));
+      if (inR >= Math.min(5, Math.max(3, live.length)) || (G.boss && G.boss.alive && ph < .5) || G.heroes.some(h => h.alive && h.hp < h.maxhp * .25)) fireFlare();
+    }
+    if (!G.lightMesh) { const m = new THREE.Mesh(new THREE.RingGeometry(.97, 1, 64), new THREE.MeshBasicMaterial({ color: 0xffc070, transparent: true, opacity: .25, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; scene.add(m); G.lightMesh = m; }
+    const lc = lightCarrier(); if (lc) { G.lightMesh.position.set(lc.pos.x, .06, lc.pos.z); G.lightMesh.scale.setScalar(lightRadius()); } }
   if (G.waveActive && G.spawnQ.length) { G.spawnT -= dt; if (G.spawnT <= 0) { const k = G.spawnQ.shift(); spawnEnemy(k); G.spawnT = Math.max(.25, .9 - G.wave * .02); } }
   const living = G.heroes.filter(h => h.alive);
   // heroes
@@ -622,6 +652,7 @@ function update(dt) {
       continue;
     }
     if (G.S.regen) h.hp = Math.min(h.maxhp, h.hp + G.S.regen * dt);
+    if (inLight(h.pos)) h.hp = Math.min(h.maxhp, h.hp + h.maxhp * Math.min(.012, .002 + .0007 * G.camp.oil) * dt);
     const d = h.def; let move = new THREE.Vector3(); let speed = d.speed * G.bonus.speed;
     const tgt = nearest(liveEn, h.pos, 30);
     if (manual && h === leader) { if (inp.lengthSq() > .01) move.copy(inp).normalize(); }
