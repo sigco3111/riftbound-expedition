@@ -310,9 +310,11 @@ addEventListener('keyup', e => keys[e.code] = false);
 }
 
 // ----- waves -----
+// 내 설계: 전투를 길게 하려고 무리당 적 수를 늘리고(CROWD), 적 한 마리의 보상/드랍/플레어 충전은 같은 비율로 줄여 경제는 유지한다.
+const CROWD = 3.6, crowdK = e => (e.def.boss || e.def.reward >= 15) ? 1 : 1 / CROWD;
 function waveComposition(w) {
   const q = []; const z = Math.floor((w - 1) / 5);
-  const n = 9 + Math.floor(w * 2.2);
+  const n = Math.round((9 + Math.floor(w * 2.2)) * CROWD);
   for (let i = 0; i < n; i++) {
     const r = Math.random(); let k = 'rat';
     if (z === 0) k = r > .55 ? 'zombie' : 'rat';
@@ -385,7 +387,8 @@ function spawnEnemy(key) {
   const d = ENEMIES[key]; const inst = makeInstance(d.gltf, d.h * 1.25, d.mode || 'y', d.yaw);
   const sx = 15 + Math.random() * 5; const pos = new THREE.Vector3(sx, 0, roadZ(G.W + sx) + (Math.random() - .5) * 5);
   const sc = d.boss ? 1600 * (.6 + G.wave * .13) / d.hp : 1 + G.wave * .09; // stage bosses share one strength curve, the model only changes the look
-  const e = { key, def: d, inst, pos, hp: d.hp * sc, maxhp: d.hp * sc, dmg: (d.boss ? 30 : d.dmg) * (1 + G.wave * .06), atkCd: 0, alive: true, clipW: findClip(inst.clips, d.walk), clipA: findClip(inst.clips, d.atk), dying: 0, hitFlash: 0 };
+  const early = d.boss ? 1 : 1 + .9 * Math.max(0, 6 - G.wave) / 5; // 초반 전투가 너무 짧아 스킬 연출이 안 보여서 1~5스테이지 일반 적 체력만 최대 +36%(내 설계)
+  const e = { key, def: d, inst, pos, hp: d.hp * sc * early, maxhp: d.hp * sc * early, dmg: (d.boss ? 30 : d.dmg) * (1 + G.wave * .06), atkCd: 0, alive: true, clipW: findClip(inst.clips, d.walk), clipA: findClip(inst.clips, d.atk), dying: 0, hitFlash: 0 };
   inst.wrap.position.copy(pos); scene.add(inst.wrap); play(inst, e.clipW);
   G.enemies.push(e); if (d.boss) G.boss = e; return e;
 }
@@ -405,7 +408,7 @@ function fireFlare() {
 }
 function damageEnemy(e, dmg, noLight) {
   if (!e.alive) return; if (!noLight && inLight(e.pos)) dmg *= 1 + .02 * G.camp.oil + .04; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg); try { fxHit(e, dmg); } catch (er) { }
-  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; G.flare = Math.min(1, G.flare + (e.def.boss ? .5 : e.def.reward >= 15 ? .1 : .045) * (1 + .3 * cardLv('p:flare'))); const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; dropLoot(e); const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held * (G.silverMul || 1)); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
+  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; G.flare = Math.min(1, G.flare + (e.def.boss ? .5 : e.def.reward >= 15 ? .1 : .045 * crowdK(e)) * (1 + .3 * cardLv('p:flare'))); const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; dropLoot(e); const gain = Math.ceil(e.def.reward * crowdK(e) * G.S.gold * G.bonus.gold * gb * held * (G.silverMul || 1)); G.earned += gain; addXp(Math.max(.4, e.def.reward * .9 * crowdK(e)) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
 }
 const dmgLayer = document.createElement('div'); dmgLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden'; document.body.appendChild(dmgLayer);
 function dmgText(pos, dmg) {
@@ -498,7 +501,7 @@ function recalcHero(h) {
 const itemName = it => `${GRADES[it.g][0]} ${SLOTS.find(x => x[0] === it.slot)[1]}`;
 function dropLoot(e) {
   const boss = !!e.def.boss, elite = !boss && e.def.reward >= 15;
-  const p = boss ? 1 : elite ? .3 : .085 * (G.wave === 1 && G.packNo <= 1 ? 1.6 : 1);
+  const p = boss ? 1 : elite ? .3 : .085 * crowdK(e) * (G.wave === 1 && G.packNo <= 1 ? 1.6 : 1);
   const n = boss ? 2 + (Math.random() < .5 ? 1 : 0) : (Math.random() < p ? 1 : 0);
   for (let i = 0; i < n; i++) {
     const h = G.heroes[Math.floor(Math.random() * G.heroes.length)], slot = SLOTS[Math.floor(Math.random() * 3)][0], it = makeItem(slot, G.wave, boss ? 1 : 0);
@@ -694,7 +697,7 @@ function update(dt) {
     }
     if (!G.lightMesh) { const m = new THREE.Mesh(new THREE.RingGeometry(.994, 1, 96), new THREE.MeshBasicMaterial({ color: 0xffc070, transparent: true, opacity: .09, side: THREE.DoubleSide, depthWrite: false })); m.rotation.x = -Math.PI / 2; scene.add(m); G.lightMesh = m; }
     const lc = lightCarrier(); if (lc) { G.lightMesh.position.set(lc.pos.x, .06, lc.pos.z); G.lightMesh.scale.setScalar(lightRadius()); G.lightMesh.material.opacity = G.flare >= 1 ? .3 : .09; } }
-  if (G.waveActive && G.spawnQ.length) { G.spawnT -= dt; if (G.spawnT <= 0) { const k = G.spawnQ.shift(); spawnEnemy(k); G.spawnT = Math.max(.25, .9 - G.wave * .02); } }
+  if (G.waveActive && G.spawnQ.length) { G.spawnT -= dt; if (G.spawnT <= 0) { const k = G.spawnQ.shift(); spawnEnemy(k); G.spawnT = Math.max(.25, .8 - G.wave * .02); } }
   const living = G.heroes.filter(h => h.alive);
   // heroes
   const inp = new THREE.Vector3((keys.KeyD || keys.ArrowRight ? 1 : 0) - (keys.KeyA || keys.ArrowLeft ? 1 : 0) + stickVec.x, 0, (keys.KeyS || keys.ArrowDown ? 1 : 0) - (keys.KeyW || keys.ArrowUp ? 1 : 0) + stickVec.y);
