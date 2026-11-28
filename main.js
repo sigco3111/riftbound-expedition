@@ -478,8 +478,8 @@ function projMesh(kind, color) {
     g.add(new THREE.Mesh(pgeo('bg', () => { const q = new THREE.CylinderGeometry(.05, .01, .6, 6, 1, true); q.rotateX(-Math.PI / 2); q.translate(0, 0, -.55); return q; }), addMat(0xffe2a8, .3)));
   } else if (kind === 'orb') { // magic orb: bright core, soft halo, cross shards
     g.add(new THREE.Mesh(pgeo('oc', () => new THREE.SphereGeometry(.11, 10, 8)), new THREE.MeshBasicMaterial({ color: col.clone().lerp(new THREE.Color(0xffffff), .75) })));
-    g.add(new THREE.Mesh(pgeo('oh', () => new THREE.SphereGeometry(.26, 12, 10)), addMat(color, .4)));
-    const sh = new THREE.Mesh(pgeo('os', () => new THREE.OctahedronGeometry(.2, 0)), addMat(color, .7)); sh.name = 'spin'; g.add(sh);
+    g.add(new THREE.Mesh(pgeo('oh', () => new THREE.SphereGeometry(.17, 12, 10)), addMat(color, .3)));
+    const sh = new THREE.Mesh(pgeo('os', () => new THREE.OctahedronGeometry(.13, 0)), addMat(color, .8)); sh.name = 'spin'; g.add(sh);
   } else if (kind === 'laser') { // energy beam
     g.add(new THREE.Mesh(pgeo('lc', () => { const q = new THREE.CylinderGeometry(.04, .04, 1.3, 6); q.rotateX(Math.PI / 2); return q; }), new THREE.MeshBasicMaterial({ color: 0xffffff })));
     g.add(new THREE.Mesh(pgeo('lh', () => { const q = new THREE.CylinderGeometry(.11, .11, 1.4, 8); q.rotateX(Math.PI / 2); return q; }), addMat(color, .45)));
@@ -833,7 +833,7 @@ function update(dt) {
     if (d.length() <= step + .3) { p.onHit(p.target); projHit(p); p.dead = true; }
     else { const dir = d.normalize(); p.mesh.position.addScaledVector(dir, step); p.mesh.lookAt(p.mesh.position.x + dir.x, p.mesh.position.y + dir.y, p.mesh.position.z + dir.z); p.tt += dt;
       const sp = p.mesh.getObjectByName('spin'); if (sp) { sp.rotation.x += dt * 9; sp.rotation.y += dt * 7; }
-      if (p.kind === 'orb' && (p.tg = (p.tg || 0) + dt) > .035) { p.tg = 0; trailPuff(p.mesh.position, p.color, .28, .3); }
+      if (p.kind === 'orb' && (p.tg = (p.tg || 0) + dt) > .02) { p.tg = 0; trailPuff(p.mesh.position, p.color, .11, .22); }
       else if (p.kind === 'bolt' && (p.tg = (p.tg || 0) + dt) > .05) { p.tg = 0; trailPuff(p.mesh.position, 0xffe2a8, .08, .18); } }
   }
   G.proj = G.proj.filter(p => { if (p.dead) scene.remove(p.mesh); return !p.dead; });
