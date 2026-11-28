@@ -249,6 +249,7 @@ async function startGame(resume) {
   if (G) cleanup();
   if (R) selected = R.party.filter(id => heroById[id]);
   const S = computeSynergy(selected);
+  if (FX.ok) try { FX.ctx.stopAll(); } catch (e) { }
   G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, camp: { whet: 0, dress: 0, oil: 0, tonic: 0 }, tonics: 2, loot: [], relics: 0, maxStage: 0, silverMul: 1, xp: 0, level: 1, pendingCards: 0, cardStack: {}, holdCount: 0, st: { downs: 0, minHp: 1, t: 0 }, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null, flare: 0 };
   for (let i = 0; i < selected.length; i++) {
     const def = heroById[selected[i]]; const gltf = await loadModel(def.file);
@@ -747,7 +748,7 @@ function fxPlay(id, pos, scale = 1, speed = 1, y = 0) {
 const fxPass = { enabled: true, needsSwap: false, clear: false, renderToScreen: false, isPass: true, setSize() { }, dispose() { },
   render(r, wb, rb, delta) {
     if (!FX.ok) return; const c = FX.ctx; const dt = Math.min(delta || .016, .05);
-    c.update(dt * 60 * (G && G.paused ? 0 : 1));
+    c.update(dt * 60 * (G && !G.paused ? (save.speed || 1) : 0));
     r.setRenderTarget(rb); c.setProjectionMatrix(camera.projectionMatrix.elements); c.setCameraMatrix(camera.matrixWorldInverse.elements);
     const gl = r.getContext(); gl.bindVertexArray(null); gl.useProgram(null); c.draw(); r.resetState();
   } };
