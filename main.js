@@ -38,13 +38,13 @@ function resize() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   const portrait = camera.aspect < 0.8;
-  camOff.set(0, portrait ? 27 : 8, portrait ? 15 : 15); camera.fov = portrait ? 62 : 46; PORT = portrait;
-  camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1);
+  camOff.set(0, portrait ? 17 : 4.8, portrait ? 12 : 10.5); camera.fov = portrait ? 58 : 42; PORT = portrait;
+  camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, .5, camTarget.z + 1);
   camera.updateProjectionMatrix();
   if (composer) composer.setSize(innerWidth, innerHeight);
 }
 addEventListener('resize', resize); resize();
-const hemi = new THREE.HemisphereLight(0x5a7ee8, 0x1c2040, 1.45); scene.add(hemi);
+const hemi = new THREE.HemisphereLight(0x6a8cf0, 0x262c52, 1.9); scene.add(hemi);
 const moon = new THREE.DirectionalLight(0x86a4ff, 2.6); moon.position.set(-10, 20, 8); scene.add(moon);
 const rim = new THREE.DirectionalLight(0x6c8cff, 1.3); rim.position.set(12, 9, -16); scene.add(rim);
 const ARENA = 19;
@@ -252,7 +252,7 @@ async function startGame(resume) {
   G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, camp: { whet: 0, dress: 0, oil: 0, tonic: 0 }, tonics: 2, loot: [], relics: 0, maxStage: 0, silverMul: 1, xp: 0, level: 1, pendingCards: 0, cardStack: {}, holdCount: 0, st: { downs: 0, minHp: 1, t: 0 }, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null, flare: 0 };
   for (let i = 0; i < selected.length; i++) {
     const def = heroById[selected[i]]; const gltf = await loadModel(def.file);
-    const inst = makeInstance(gltf, 1.75, 'y', 0);
+    const inst = makeInstance(gltf, 2.5, 'y', 0);
     const hero = { def, inst, hp: def.hp * S.hp, maxhp: def.hp * S.hp, pos: new THREE.Vector3(Math.cos(i * 1.2) * 3 + 0, 0, 3 + Math.sin(i * 1.2) * 2), atkCd: 0, skCd: 3 + i, alive: true, busy: 0, face: 0, idx: i };
     hero.clips = { idle: findClip(inst.clips, /Idle$/) || findClip(inst.clips, /Idle/), walk: findClip(inst.clips, /Walk$/), run: findClip(inst.clips, /Run$/), melee: findClip(inst.clips, /Sword_Slash$/), gun: findClip(inst.clips, /Gun_Shoot$/), punch: findClip(inst.clips, /Punch_Left$/), kick: findClip(inst.clips, /Kick_Right$/), cast: findClip(inst.clips, /Interact$/), wave: findClip(inst.clips, /Wave$/), die: findClip(inst.clips, /Death$/), hit: findClip(inst.clips, /HitRecieve$/) };
     hero.attackClips = def.anim.map(n => hero.clips[n]).filter(Boolean);
@@ -381,7 +381,7 @@ function stageFlow(dt) {
 }
 function nextWave() { G.wave++; G.state = 'init'; beginStage(); }
 function spawnEnemy(key) {
-  const d = ENEMIES[key]; const inst = makeInstance(d.gltf, d.h, d.mode || 'y', d.yaw);
+  const d = ENEMIES[key]; const inst = makeInstance(d.gltf, d.h * 1.25, d.mode || 'y', d.yaw);
   const sx = 15 + Math.random() * 5; const pos = new THREE.Vector3(sx, 0, roadZ(G.W + sx) + (Math.random() - .5) * 5);
   const sc = d.boss ? 1600 * (.6 + G.wave * .13) / d.hp : 1 + G.wave * .09; // stage bosses share one strength curve, the model only changes the look
   const e = { key, def: d, inst, pos, hp: d.hp * sc, maxhp: d.hp * sc, dmg: (d.boss ? 30 : d.dmg) * (1 + G.wave * .06), atkCd: 0, alive: true, clipW: findClip(inst.clips, d.walk), clipA: findClip(inst.clips, d.atk), dying: 0, hitFlash: 0 };
@@ -716,7 +716,7 @@ function update(dt) {
   if (!G.over && G.state !== 'wipe' && G.state !== 'init' && living.length === 0 && G.heroes.length) { G.state = 'wipe'; G.stT = 0; G.flames--; toast(G.flames > 0 ? '불꽃이 하나 꺼졌습니다' : '마지막 불꽃이 꺼졌습니다'); }
   // lantern glow
   const pulse = .85 + Math.sin(G.t * 3) * .1; lantern.userData.light.intensity = 110 * pulse * (.72 + .0933 * Math.max(0, G.flames));
-  { const c = new THREE.Vector3(); let n = 0; living.forEach(h => { c.add(h.pos); n++; }); if (n) { c.multiplyScalar(.75 / n); c.x += PORT ? 1.5 : 3; camTarget.lerp(c, Math.min(1, dt * 3)); camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, 0, camTarget.z + 1); } }
+  { const c = new THREE.Vector3(); let n = 0; living.forEach(h => { c.add(h.pos); n++; }); if (n) { c.multiplyScalar(.75 / n); c.x += PORT ? 1.5 : 3; camTarget.lerp(c, Math.min(1, dt * 3)); camera.position.copy(camTarget).add(camOff); camera.lookAt(camTarget.x, .5, camTarget.z + 1); } }
   { const rem = G.W - SZ * Math.round(G.W / SZ); world.position.x = -rem; if (grassMesh) grassMesh.position.x = -rem; const ox = G.W / SZ + .5; groundMat.map.offset.set(ox, .5); groundMat.roughnessMap.offset.set(ox, .5); }
   lantern.position.set(-1.8, 0, CEN.z); embers.position.copy(lantern.position);
   tickEmbers(G.t, dt);
