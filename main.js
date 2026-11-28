@@ -230,7 +230,7 @@ function fillPortraits(ids) {
     if (PORT_IMG[id]) return; const def = heroById[id]; if (!def) return;
     try {
       const gltf = await loadModel(def.file);
-      if (!PORT_R) { const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); r.outputColorSpace = THREE.SRGBColorSpace; r.setSize(160, 160, false); const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x445066, 2.0)); const dl = new THREE.DirectionalLight(0xffe2b0, 2.2); dl.position.set(1.5, 2.5, 3); sc.add(dl); const cam = new THREE.PerspectiveCamera(26, 1, .1, 50); cam.position.set(0, 1.45, 2.1); cam.lookAt(0, 1.38, 0); PORT_R = { r, sc, cam }; }
+      if (!PORT_R) { const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); r.outputColorSpace = THREE.SRGBColorSpace; r.setSize(160, 160, false); const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x445066, 2.0)); const dl = new THREE.DirectionalLight(0xffe2b0, 2.2); dl.position.set(1.5, 2.5, 3); sc.add(dl); const cam = new THREE.PerspectiveCamera(26, 1, .1, 50); cam.position.set(0, 1.5, 1.6); cam.lookAt(0, 1.46, 0); PORT_R = { r, sc, cam }; }
       const inst = makeInstance(gltf, 1.75, 'y', 0); PORT_R.sc.add(inst.wrap); inst.mixer.update(0); PORT_R.r.render(PORT_R.sc, PORT_R.cam);
       PORT_IMG[id] = PORT_R.r.domElement.toDataURL('image/png'); PORT_R.sc.remove(inst.wrap);
     } catch (e) { return; }
@@ -252,13 +252,63 @@ async function openDetail(h) {
   const inst = makeInstance(gltf, 1.75, 'y', 0); pv.sc.add(inst.wrap); pv.inst = inst; pv.t = 0; pv.clipList = ['Idle', ...h.anim.map(n => ({ melee: 'Sword_Slash', gun: 'Gun_Shoot', punch: 'Punch_Left', kick: 'Kick_Right', cast: 'Interact', wave: 'Wave' }[n]))];
   pv.ci = -1; const loop = () => { if (pv.stop || pv.inst !== inst) return; requestAnimationFrame(loop); const dt = Math.min(pv.clock.getDelta(), .05); pv.t += dt; if (pv.t > (pv.ci <= 0 ? 2.2 : 1.6) || pv.ci < 0) { pv.t = 0; pv.ci = (pv.ci + 1) % pv.clipList.length; play(inst, findClip(inst.clips, new RegExp(pv.pclip = pv.clipList[pv.ci] + '$')), { loop: pv.ci === 0, fade: .12 }); } inst.wrap.rotation.y += dt * .6; inst.mixer.update(dt); pv.r.render(pv.sc, pv.cam); }; loop();
 }
+// ---------- story scenes (own illustration: hand-written SVG; own dialogue) ----------
+const STORY_ART = {
+  intro: `<svg viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+<defs><linearGradient id="sk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#050816"/><stop offset=".6" stop-color="#101a38"/><stop offset="1" stop-color="#2a2140"/></linearGradient>
+<radialGradient id="rg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ff7ac0" stop-opacity=".9"/><stop offset=".4" stop-color="#b04ad8" stop-opacity=".35"/><stop offset="1" stop-color="#b04ad8" stop-opacity="0"/></radialGradient>
+<radialGradient id="lg" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffd58a" stop-opacity=".85"/><stop offset="1" stop-color="#ff9b3d" stop-opacity="0"/></radialGradient>
+<linearGradient id="gd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1830"/><stop offset="1" stop-color="#07060d"/></linearGradient>
+<filter id="bl"><feGaussianBlur stdDeviation="6"/></filter></defs>
+<rect width="1600" height="900" fill="url(#sk)"/>
+<g fill="#cfd8ff" opacity=".8">${Array.from({ length: 60 }, (_, i) => `<circle cx="${(i * 197 + 53) % 1600}" cy="${(i * 89 + 31) % 420}" r="${(i % 4) * .4 + .7}"/>`).join('')}</g>
+<ellipse cx="800" cy="330" rx="330" ry="420" fill="url(#rg)"/>
+<path d="M800 -10 L772 120 L812 200 L760 320 L822 430 L780 560 L806 640 L796 640 L770 560 L808 430 L748 320 L798 200 L758 120 L790 -10Z" fill="#ffe3f4" filter="url(#bl)" opacity=".9"/>
+<path d="M800 -10 L772 120 L812 200 L760 320 L822 430 L780 560 L806 640 L796 640 L770 560 L808 430 L748 320 L798 200 L758 120 L790 -10Z" fill="#fff4fb"/>
+<g transform="translate(250 250)" opacity=".92"><path d="M0 260 L0 120 L40 120 L40 90 L70 90 L70 120 L110 120 L110 50 L140 20 L170 50 L170 120 L210 120 L210 90 L240 90 L240 260Z" fill="#171220" stroke="#d99a4e" stroke-width="3"/><circle cx="140" cy="160" r="16" fill="#ffb355"/></g>
+<g transform="translate(980 190)" opacity=".92"><path d="M0 330 L0 140 L60 140 L60 60 L120 60 L120 200 L170 200 L170 100 L230 100 L230 330Z" fill="#0f1730" stroke="#5cb3ee" stroke-width="3"/>${Array.from({ length: 14 }, (_, i) => `<rect x="${12 + (i % 3) * 18}" y="${160 + Math.floor(i / 3) * 30}" width="8" height="12" fill="#7fd0ff"/>`).join('')}</g>
+<g transform="translate(1260 120) rotate(-14)" opacity=".92"><ellipse cx="0" cy="0" rx="150" ry="34" fill="none" stroke="#a77be8" stroke-width="6"/><ellipse cx="0" cy="0" rx="62" ry="22" fill="#110d22" stroke="#a77be8" stroke-width="3"/><circle cx="0" cy="0" r="8" fill="#c9b0ff"/></g>
+<path d="M0 640 Q400 600 800 640 T1600 630 L1600 900 L0 900Z" fill="url(#gd)"/>
+<path d="M-50 760 Q500 700 800 650 Q1100 700 1650 770" fill="none" stroke="#6a78c8" stroke-width="3" opacity=".35"/>
+<ellipse cx="800" cy="650" rx="300" ry="28" fill="#ff7ac0" opacity=".16"/><rect y="560" width="1600" height="120" fill="#8a7fc0" opacity=".06"/>
+<ellipse cx="420" cy="560" rx="300" ry="260" fill="url(#lg)"/>
+<g transform="translate(420 372)"><rect x="-6" y="40" width="12" height="260" fill="#0a0910"/><rect x="-26" y="20" width="52" height="8" fill="#0a0910"/><path d="M-22 20 L-16 -34 L16 -34 L22 20Z" fill="#ffe2a0"/><path d="M-26 -34 L0 -58 L26 -34Z" fill="#0a0910"/><rect x="-20" y="294" width="40" height="10" fill="#0a0910"/></g>
+<g fill="#07060d">${[[540, 640, 1.1], [620, 655, 1], [700, 645, 1.05], [1000, 652, .95], [1090, 664, .85]].map(([x, y, k]) => `<g transform="translate(${x} ${y}) scale(${k})"><ellipse cx="0" cy="20" rx="26" ry="7" opacity=".5"/><path d="M-15 20 L-12 -52 L-20 -66 Q0 -92 20 -66 L12 -52 L15 20Z"/><circle cx="0" cy="-76" r="14"/></g>`).join('')}</g>
+</svg>`,
+};
+const STORY = {
+  intro: [
+    { who: null, t: '세 시대가 한 하늘 아래 겹친 밤. 갈라진 하늘 틈, 균열에서 쏟아진 어둠이 모든 불빛을 삼키고 있었다.' },
+    { who: 'w_medieval', t: '마지막 등불이 아직 켜져 있다. 이 불이 꺼지면 돌아갈 길도 같이 사라진다.' },
+    { who: 'w_soldier', t: '성벽이 있던 자리에 이제 철골이 서 있고, 그 위로 별이 부서지고 있어요. 대체 몇 개의 세계가 섞인 거죠?' },
+    { who: 'w_witch', t: '균열의 가장자리는 세 가지 빛깔로 울고 있어. 전부 따라가 보면 중심에 닿을 거야.' },
+    { who: 'm_king', t: '재가 된 왕국의 왕으로서 명한다. 등불을 지켜라. 그리고 균열의 끝까지 가자.' },
+  ],
+};
+function showStory(key, done) {
+  const lines = STORY[key]; let i = 0;
+  const el = document.createElement('div'); el.id = 'story';
+  el.innerHTML = `<div class="art">${STORY_ART[key]}</div><div class="vig"></div><button class="skip" id="stSkip">건너뛰기</button><div class="dlg" id="stDlg"></div>`;
+  document.body.appendChild(el);
+  fillPortraits([...new Set(lines.map(l => l.who).filter(Boolean))]);
+  const end = () => { el.classList.add('out'); setTimeout(() => el.remove(), 350); done(); };
+  const draw = () => {
+    const l = lines[i], d = $('stDlg'), h = l.who && heroById[l.who];
+    d.innerHTML = `${h ? ptHtml(h.id, 'lg') : '<span class="pt lg nar">◈</span>'}<div class="tx"><b class="${h ? '' : 'nar'}" ${h ? `style="color:${ERA[h.era].color}"` : ''}>${h ? h.name : '나레이션'}</b><p>${l.t}</p></div><span class="nx">${i + 1} / ${lines.length} · 클릭하여 계속</span>`;
+    if (h) document.querySelectorAll(`#stDlg img[data-pid="${h.id}"]`).forEach(im => { if (PORT_IMG[h.id]) im.src = PORT_IMG[h.id]; });
+    d.classList.remove('in'); void d.offsetWidth; d.classList.add('in');
+  };
+  el.onclick = e => { if (e.target.id === 'stSkip') return end(); if (++i >= lines.length) end(); else draw(); };
+  draw();
+}
 $('startBtn').onclick = () => {
   if (save.run) {
     const g = emberGain(save.run.maxStage, save.run.relics);
     if (!confirm(`진행 중인 원정(스테이지 ${save.run.wave}, Lv${save.run.level})이 있습니다.\n[확인] 포기하고 정산: 엠버 +${g}을 받고, 이 원정의 장비/레벨/은화는 사라지며 새로 출정합니다.\n[취소] 그대로 두고 "이어하기"를 사용합니다.`)) return;
     save.embers += g; save.best = Math.max(save.best || 0, save.run.maxStage); save.run = null; persist();
   }
-  save.party = selected.slice(); persist(); startGame(); };
+  save.party = selected.slice(); persist();
+  if (!(save.story && save.story.intro)) showStory('intro', () => { save.story = Object.assign(save.story || {}, { intro: 1 }); persist(); startGame(); }); else startGame(); };
 $('contBtn').onclick = () => { if (save.run) startGame(true); };
 $('resetBtn').onclick = () => { if (confirm('저장 데이터를 지울까요?')) { localStorage.removeItem(SAVE_KEY); location.reload(); } };
 
