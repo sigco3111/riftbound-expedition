@@ -227,7 +227,13 @@ async function openDetail(h) {
   const inst = makeInstance(gltf, 1.75, 'y', 0); pv.sc.add(inst.wrap); pv.inst = inst; pv.t = 0; pv.clipList = ['Idle', ...h.anim.map(n => ({ melee: 'Sword_Slash', gun: 'Gun_Shoot', punch: 'Punch_Left', kick: 'Kick_Right', cast: 'Interact', wave: 'Wave' }[n]))];
   pv.ci = -1; const loop = () => { if (pv.stop || pv.inst !== inst) return; requestAnimationFrame(loop); const dt = Math.min(pv.clock.getDelta(), .05); pv.t += dt; if (pv.t > (pv.ci <= 0 ? 2.2 : 1.6) || pv.ci < 0) { pv.t = 0; pv.ci = (pv.ci + 1) % pv.clipList.length; play(inst, findClip(inst.clips, new RegExp(pv.pclip = pv.clipList[pv.ci] + '$')), { loop: pv.ci === 0, fade: .12 }); } inst.wrap.rotation.y += dt * .6; inst.mixer.update(dt); pv.r.render(pv.sc, pv.cam); }; loop();
 }
-$('startBtn').onclick = () => { if (save.run && !confirm(`진행 중인 원정(스테이지 ${save.run.wave})이 있습니다. 새로 시작하면 사라집니다. 계속할까요?`)) return; save.party = selected.slice(); persist(); startGame(); };
+$('startBtn').onclick = () => {
+  if (save.run) {
+    const g = emberGain(save.run.maxStage, save.run.relics);
+    if (!confirm(`진행 중인 원정(스테이지 ${save.run.wave}, Lv${save.run.level})이 있습니다.\n[확인] 포기하고 정산: 엠버 +${g}을 받고, 이 원정의 장비/레벨/은화는 사라지며 새로 출정합니다.\n[취소] 그대로 두고 "이어하기"를 사용합니다.`)) return;
+    save.embers += g; save.best = Math.max(save.best || 0, save.run.maxStage); save.run = null; persist();
+  }
+  save.party = selected.slice(); persist(); startGame(); };
 $('contBtn').onclick = () => { if (save.run) startGame(true); };
 $('resetBtn').onclick = () => { if (confirm('저장 데이터를 지울까요?')) { localStorage.removeItem(SAVE_KEY); location.reload(); } };
 
@@ -437,13 +443,14 @@ function heroSkill(h) {
   else h.skCd = Math.min(h.skCd, 0) + .5;
 }
 
+const emberGain = (ms, rel) => Math.max(1, Math.floor(Math.pow(Math.max(0, ms), 1.25) * .75 + rel));
 function end(win) {
   if (G.over) return;
-  G.over = true; save.run = null; const gain = Math.max(1, Math.floor(Math.pow(Math.max(0, G.maxStage), 1.25) * .75 + G.relics));
+  G.over = true; save.run = null; const gain = emberGain(G.maxStage, G.relics);
   save.embers += gain; save.best = Math.max(save.best || 0, G.maxStage); persist();
   const m = $('modal'); m.classList.remove('hidden');
   let retryStop = null, retryDone = false;
-  const armRetry = () => { if (retryStop) retryStop(); retryStop = countdown(m, 12, () => { if (!retryDone && save.autoRetry && G && G.over) { retryDone = true; startGame(); } }, '자동으로 다시 출정 (화면을 누르면 멈춤)'); };
+  const armRetry = () => { if (retryStop) retryStop(); retryStop = countdown(m, 8, () => { if (!retryDone && save.autoRetry && G && G.over) { retryDone = true; startGame(); } }, '자동으로 다시 출정 (화면을 누르면 멈춤)'); };
   const render = () => {
     m.innerHTML = `<h1>등불이 꺼졌습니다</h1><p>도달 스테이지 ${G.maxStage} · 레벨 ${G.level} · 처치 ${G.kills} · 유물 ${G.relics} · 획득 엠버 ${gain}</p><p>보유 엠버 <b>${save.embers}</b> (영구 강화: 다음 런부터 계속 적용)</p>` +
       BOONS.map(b => { const lv = boonLv(b[0]), mx = lv >= b[4]; return `<button class="opt" data-b="${b[0]}" ${mx || save.embers < boonCost(b[0]) ? 'disabled' : ''}><b>${b[1]}</b> ${lv}/${b[4]}<br>${b[2]} · ${mx ? '최대' : '비용 ' + boonCost(b[0])}</button>`; }).join('') +
