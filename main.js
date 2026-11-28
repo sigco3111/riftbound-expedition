@@ -230,7 +230,7 @@ function fillPortraits(ids) {
     if (PORT_IMG[id]) return; const def = heroById[id]; if (!def) return;
     try {
       const gltf = await loadModel(def.file);
-      if (!PORT_R) { const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); r.outputColorSpace = THREE.SRGBColorSpace; r.setSize(160, 160, false); const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x445066, 2.0)); const dl = new THREE.DirectionalLight(0xffe2b0, 2.2); dl.position.set(1.5, 2.5, 3); sc.add(dl); const cam = new THREE.PerspectiveCamera(26, 1, .1, 50); cam.position.set(0, 1.5, 1.6); cam.lookAt(0, 1.46, 0); PORT_R = { r, sc, cam }; }
+      if (!PORT_R) { const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); r.outputColorSpace = THREE.SRGBColorSpace; r.setSize(160, 160, false); const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x445066, 2.0)); const dl = new THREE.DirectionalLight(0xffe2b0, 2.2); dl.position.set(1.5, 2.5, 3); sc.add(dl); const cam = new THREE.PerspectiveCamera(26, 1, .1, 50); cam.position.set(0, 1.45, 2.1); cam.lookAt(0, 1.38, 0); PORT_R = { r, sc, cam }; }
       const inst = makeInstance(gltf, 1.75, 'y', 0); PORT_R.sc.add(inst.wrap); inst.mixer.update(0); PORT_R.r.render(PORT_R.sc, PORT_R.cam);
       PORT_IMG[id] = PORT_R.r.domElement.toDataURL('image/png'); PORT_R.sc.remove(inst.wrap);
     } catch (e) { return; }
@@ -407,7 +407,7 @@ $('modeBtn').onclick = () => { manual = !manual; };
 $('flareBtn').onclick = () => { fireFlare(); };
 $('speedBtn').onclick = () => { save.speed = save.speed === 1 ? 2 : save.speed === 2 ? 4 : 1; persist(); $('speedBtn').textContent = save.speed + '배속'; };
 $('speedBtn').textContent = save.speed + '배속';
-addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') { manual = !manual; e.preventDefault(); } });
+addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') { e.preventDefault(); if (G && G.storyOpen) return; manual = !manual; e.preventDefault(); } });
 addEventListener('keyup', e => keys[e.code] = false);
 { // touch stick
   const st = $('stick'), kn = $('knob'); let act = false;
@@ -508,7 +508,7 @@ const cardLv = id => (G.cardStack && G.cardStack[id]) || 0;
 const lightRadius = () => 9 * (1 + .06 * G.camp.oil + .15 * cardLv('p:light')) * (.72 + .0933 * G.flames);
 function inLight(pos) { const c = lightCarrier(); return !!c && Math.hypot(pos.x - c.pos.x, pos.z - c.pos.z) < lightRadius(); }
 function fireFlare() {
-  if (!G || G.over || G.paused || G.flare < 1 || G.heroes.every(h => !h.alive)) return false;
+  if (!G || G.over || G.paused || G.storyOpen || G.flare < 1 || G.heroes.every(h => !h.alive)) return false;
   G.flare = 0; const c = lightCarrier(), r = lightRadius(), pf = 1 + .3 * cardLv('p:flare');
   const dmg = G.heroes.reduce((a, h) => a + ((h.def.dmg || 0) * G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.S.dmg), 0) * 1.5 * pf;
   G.enemies.forEach(e => { if (e.alive && Math.hypot(e.pos.x - c.pos.x, e.pos.z - c.pos.z) < r) damageEnemy(e, dmg); });
@@ -725,7 +725,7 @@ function planCamp() { // 추천 정비: 구매 순서를 시뮬레이션만 하�
 let hubOpen = false;
 function campHint() { const b = $('campBtn'); if (b) { b.classList.add('ready'); b.textContent = '정비 ●'; } toast('정비 가능 (우상단 정비 버튼)'); }
 function openHub(onBack) {
-  if (!G || G.over || hubOpen) return; const was = G.paused; if (!onBack && was) return;
+  if (!G || G.over || G.storyOpen || hubOpen) return; const was = G.paused; if (!onBack && was) return;
   hubOpen = true; G.paused = true; const m = $('modal'); m.classList.remove('hidden'); let tab = -1, pv = null, sellArm = null, bagSlot = 'all', bagMore = 40;
   const gearTxt = it => it ? `${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}` : '없음';
   const close = () => { hubOpen = false; $('campBtn').classList.remove('ready'); $('campBtn').textContent = '정비'; if (onBack) onBack(); else { m.classList.add('hidden'); G.paused = false; } };
