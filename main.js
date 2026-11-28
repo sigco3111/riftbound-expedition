@@ -201,7 +201,7 @@ function renderMenu() {
     const unlocked = save.unlocked.includes(h.id);
     const d = document.createElement('div');
     d.className = `hc e-${h.era}` + (selected.includes(h.id) ? ' sel' : '') + (unlocked ? '' : ' lock');
-    d.innerHTML = `<b>${h.name}</b><span class="era" style="color:${ERA[h.era].color}">${ERA[h.era].name}</span><span class="role">${h.roleName}</span><p class="bl">${unlocked ? h.blurb : `<span class="lk">잠김 · ${h.cost} 엠버</span>`}</p><span class="info">i</span>${selected.includes(h.id) ? '<span class="pick">편성 ' + (selected.indexOf(h.id) + 1) + '</span>' : ''}`;
+    d.innerHTML = `${ptHtml(h.id, 'lg')}<b>${h.name}</b><span class="era" style="color:${ERA[h.era].color}">${ERA[h.era].name}</span><span class="role">${h.roleName}</span><p class="bl">${unlocked ? h.blurb : `<span class="lk">잠김 · ${h.cost} 엠버</span>`}</p><span class="info">i</span>${selected.includes(h.id) ? '<span class="pick">편성 ' + (selected.indexOf(h.id) + 1) + '</span>' : ''}`;
     d.querySelector('.info').onclick = e => { e.stopPropagation(); openDetail(h); };
     d.onclick = () => toggleHero(h);
     grid.appendChild(d);
@@ -211,6 +211,7 @@ function renderMenu() {
   const S = computeSynergy(selected);
   $('preview').innerHTML = selected.length ? (S.chips.length ? S.chips.map(c => `<span class="chip">${c}</span>`).join(' ') : '활성 시너지 없음 (같은 시대 2명 이상이면 발동)') : '영웅을 눌러 파티에 넣으세요. i 버튼은 상세/3D 보기.';
   const b = $('startBtn'); b.disabled = selected.length < 1; b.textContent = selected.length === 5 ? '출정' : `출정 (${selected.length}/5명)`;
+  fillPortraits(HEROES.filter(h => (eraTab === 'all' || h.era === eraTab)).sort((a, b) => (selected.includes(b.id) | 0) - (selected.includes(a.id) | 0) || (save.unlocked.includes(b.id) | 0) - (save.unlocked.includes(a.id) | 0)).map(h => h.id));
   $('credits').innerHTML = CREDITS;
 }
 function toggleHero(h) {
@@ -219,6 +220,22 @@ function toggleHero(h) {
   else if (selected.includes(h.id)) selected = selected.filter(x => x !== h.id);
   else if (selected.length < 5) selected.push(h.id);
   renderMenu();
+}
+// hero portraits: own offscreen render, cached as data URLs
+const PORT_IMG = {}; let PORT_R = null, PORT_Q = Promise.resolve();
+const EQI = { weapon: '<svg viewBox="0 0 24 24"><path d="M14.5 3.5 20.5 3.5 20.5 9.5 10 20 7.5 17.5 18 7z M5.5 15.5 8.5 18.5 5 22 2 22 2 19z" fill="currentColor"/></svg>', armour: '<svg viewBox="0 0 24 24"><path d="M12 2 20 5.5V12c0 5-3.6 8.6-8 10-4.4-1.4-8-5-8-10V5.5z" fill="currentColor"/></svg>', trinket: '<svg viewBox="0 0 24 24"><path d="M12 2 15 9 22 9.5 16.5 14 18.5 21.5 12 17.5 5.5 21.5 7.5 14 2 9.5 9 9z" fill="currentColor"/></svg>' };
+function ptHtml(id, cls) { return `<span class="pt ${cls || ''}"><img data-pid="${id}" alt="" ${PORT_IMG[id] ? `src="${PORT_IMG[id]}"` : ''}></span>`; }
+function fillPortraits(ids) {
+  ids.forEach(id => { if (PORT_IMG[id]) return; PORT_Q = PORT_Q.then(async () => {
+    if (PORT_IMG[id]) return; const def = heroById[id]; if (!def) return;
+    try {
+      const gltf = await loadModel(def.file);
+      if (!PORT_R) { const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true }); r.outputColorSpace = THREE.SRGBColorSpace; r.setSize(160, 160, false); const sc = new THREE.Scene(); sc.add(new THREE.HemisphereLight(0xdfe8ff, 0x445066, 2.0)); const dl = new THREE.DirectionalLight(0xffe2b0, 2.2); dl.position.set(1.5, 2.5, 3); sc.add(dl); const cam = new THREE.PerspectiveCamera(26, 1, .1, 50); cam.position.set(0, 1.45, 2.1); cam.lookAt(0, 1.38, 0); PORT_R = { r, sc, cam }; }
+      const inst = makeInstance(gltf, 1.75, 'y', 0); PORT_R.sc.add(inst.wrap); inst.mixer.update(0); PORT_R.r.render(PORT_R.sc, PORT_R.cam);
+      PORT_IMG[id] = PORT_R.r.domElement.toDataURL('image/png'); PORT_R.sc.remove(inst.wrap);
+    } catch (e) { return; }
+    document.querySelectorAll(`img[data-pid="${id}"]`).forEach(im => im.src = PORT_IMG[id]);
+  }); });
 }
 // 3D detail preview (own renderer)
 let pv = null;
@@ -565,8 +582,8 @@ function openHub(onBack) {
   const gearTxt = it => it ? `${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}` : '없음';
   const close = () => { hubOpen = false; $('campBtn').classList.remove('ready'); $('campBtn').textContent = '정비'; if (onBack) onBack(); else { m.classList.add('hidden'); G.paused = false; } };
   const render = () => {
-    const railBtn = (t, label, sub, era) => `<button class="rt${tab === t ? ' on' : ''}" data-t="${t}" ${era ? `style="--era:${era}"` : ''}><b>${label}</b>${sub ? `<em>${sub}</em>` : ''}</button>`;
-    const tabs = railBtn(-1, '파티 정비', '공용 강화', '') + G.heroes.map((h, i) => railBtn(i, h.def.name, `${ERA[h.def.era].name} · ${h.def.roleName}`, ERA[h.def.era].color)).join('');
+    const railBtn = (t, label, sub, era, id) => `<button class="rt${tab === t ? ' on' : ''}" data-t="${t}" ${era ? `style="--era:${era}"` : ''}>${id ? ptHtml(id) : ''}<span class="rtx"><b>${label}</b>${sub ? `<em>${sub}</em>` : ''}</span></button>`;
+    const tabs = railBtn(-1, '파티 정비', '공용 강화', '') + G.heroes.map((h, i) => railBtn(i, h.def.name, `${ERA[h.def.era].name} · ${h.def.roleName}`, ERA[h.def.era].color, h.def.id)).join('');
     const row = (attr, key, title, sub, cost, dis) => `<button class="opt" ${attr}="${key}" ${dis ? 'disabled' : ''}><span class="ot"><b>${title}</b><em>${sub}</em></span><span class="cost">${cost}<small>은화</small></span></button>`;
     let body = '';
     if (tab === -1) {
@@ -577,12 +594,12 @@ function openHub(onBack) {
     } else {
       const h = G.heroes[tab], g = h.gear || {};
       const trn = k => row('data-tr', k, `${k === 'atk' ? '공격 훈련' : k === 'hp' ? '체력 훈련' : '스킬 수련'} <i class="lv">Lv ${(h.tr || {})[k] | 0}</i>`, k === 'atk' ? '기본 공격력 +6%' : k === 'hp' ? '체력 +6%' : (SKILL_DESC[h.def.skill.type] || '스킬').split(':')[0] + ': ' + (SK_TRAIN[h.def.skill.type] || '스킬 위력 +8%'), trainCost(h, k), G.earned < trainCost(h, k) || (k === 'sk' && !skTrainable(h)));
-      body = `<div class="hero-head" style="--era:${ERA[h.def.era].color}"><div><h2>${h.def.name}</h2><span class="era">${ERA[h.def.era].name} · ${h.def.roleName}</span></div><dl class="stats"><div><dt>체력</dt><dd>${Math.round(h.maxhp)}</dd></div><div><dt>공격 배율</dt><dd>${(h.mul || 1).toFixed(2)}</dd></div></dl></div>` +
-        `<h3>장비</h3><div class="gslots">${SLOTS.map(sl => { const it = g[sl[0]]; return `<div class="gslot${it ? '' : ' empty'}"><span class="sn">${sl[1]}</span>${it ? `<b>${itemName(it)}</b><i>+${it.pow}%${it.spT ? ' · ' + it.spT : ''}</i>` : '<b>비어 있음</b>'}</div>`; }).join('')}</div>` +
+      body = `<div class="hero-head" style="--era:${ERA[h.def.era].color}">${ptHtml(h.def.id, "xl")}<div class="hn"><h2>${h.def.name}</h2><span class="era">${ERA[h.def.era].name} · ${h.def.roleName}</span></div><dl class="stats"><div><dt>체력</dt><dd>${Math.round(h.maxhp)}</dd></div><div><dt>공격 배율</dt><dd>${(h.mul || 1).toFixed(2)}</dd></div></dl></div>` +
+        `<h3>장비</h3><div class="gslots">${SLOTS.map(sl => { const it = g[sl[0]]; return `<div class="gslot${it ? '' : ' empty'}"><span class="sn"><i class="eqi">${EQI[sl[0]]}</i>${sl[1]}</span>${it ? `<b>${itemName(it)}</b><i>+${it.pow}%${it.spT ? ' · ' + it.spT : ''}</i>` : '<b>비어 있음</b>'}</div>`; }).join('')}</div>` +
         `<h3>훈련</h3><div class="list">${['atk', 'hp', 'sk'].map(trn).join('')}</div>` +
         (() => { const all = G.bag || [], L = all.map((it, bi) => ({ it, bi })).filter(x => bagSlot === 'all' || x.it.slot === bagSlot).sort((a, b) => b.it.pow - a.it.pow), shown = L.slice(0, bagMore); return `<h3>가방 <span class="mute">${all.length}개 · 판매는 두 번 눌러야 확정됩니다</span></h3><div class="flt">${[['all', '전체'], ...SLOTS.map(x => [x[0], x[1]])].map(f => `<button class="fl${bagSlot === f[0] ? ' on' : ''}" data-f="${f[0]}">${f[1]}</button>`).join('')}</div>` + shown.map(x => `<div class="bagrow"><span><b>${gearTxt(x.it)}</b><em>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍 · ' : ''}현재 ${h.def.name}: ${gearTxt(g[x.it.slot])}</em></span><button class="sm" data-eq="${x.bi}">장착</button><button class="sm ghost${sellArm === x.it ? ' warn' : ''}" data-sell="${x.bi}">${sellArm === x.it ? '정말 판매? ' : '판매 '}${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('') + (L.length > shown.length ? `<button class="ghost" data-more="1">더 보기 (${L.length - shown.length}개 남음)</button>` : ''); })();
     }
-    m.innerHTML = `<div class="hub"><header class="hubhead"><div><h1>정비</h1><p class="note">열려 있는 동안 전투는 멈춰 있습니다</p></div><div class="silver"><span>은화</span><b>${Math.round(G.earned)}</b></div></header><div class="hubgrid"><nav class="rail">${tabs}</nav><section class="pane">${body}</section></div><div class="hubfoot"><button class="mbtn" id="hubClose">닫고 계속</button></div></div>`;
+    m.innerHTML = `<div class="hub"><header class="hubhead"><div><h1>정비</h1><p class="note">열려 있는 동안 전투는 멈춰 있습니다</p></div><div class="silver"><span>은화</span><b>${Math.round(G.earned)}</b></div></header><div class="hubgrid"><nav class="rail">${tabs}</nav><section class="pane">${body}</section></div><div class="hubfoot"><button class="mbtn" id="hubClose">닫고 계속</button></div></div>`; fillPortraits(G.heroes.map(x => x.def.id));
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; sellArm = null; render(); });
     m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { buyCamp(b.dataset.c); render(); });
     m.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { train(G.heroes[tab], b.dataset.tr); render(); });
