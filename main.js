@@ -742,7 +742,7 @@ async function initFx() {
 }
 function fxPlay(id, pos, scale = 1, speed = 1, y = 0) {
   if (!FX.ok || !FX.fx[id]) return null;
-  const h = FX.ctx.play(FX.fx[id], pos.x, y, pos.z); if (scale !== 1) h.setScale(scale, scale, scale); if (speed !== 1) h.setSpeed(speed); FX.n = (FX.n || 0) + 1; return h;
+  const h = FX.ctx.play(FX.fx[id], pos.x, y, pos.z); scale = Math.min(scale, 1.6); if (scale !== 1) h.setScale(scale, scale, scale); if (speed !== 1) h.setSpeed(speed); FX.n = (FX.n || 0) + 1; return h;
 }
 const fxPass = { enabled: true, needsSwap: false, clear: false, renderToScreen: false, isPass: true, setSize() { }, dispose() { },
   render(r, wb, rb, delta) {
@@ -751,7 +751,7 @@ const fxPass = { enabled: true, needsSwap: false, clear: false, renderToScreen: 
     r.setRenderTarget(rb); c.setProjectionMatrix(camera.projectionMatrix.elements); c.setCameraMatrix(camera.matrixWorldInverse.elements);
     const gl = r.getContext(); gl.bindVertexArray(null); gl.useProgram(null); c.draw(); r.resetState();
   } };
-const SKILL_FX = { aoe: ['thunder', .6], pull: ['tornado', .7], heal: ['heal', 1.1], aura: ['powerup', 1], barrier: ['barrier', 1], dash: ['slash', .7], volley: ['fireball', .6], turret: ['flame', .8], trap: ['flame', 1] };
+const SKILL_FX = { aoe: ['thunder', .6], pull: ['tornado', .7], heal: ['heal', 1.1], aura: ['powerup', 1], barrier: ['barrier', .65], dash: ['slash', .7], volley: ['fireball', .9], turret: ['flame', .8], trap: ['flame', 1] };
 function fxSkill(h, sk, target) {
   const f = SKILL_FX[sk.type]; if (!f) return;
   const now = performance.now(); if (now - (FX.lastCast[h.def.id] || 0) < 400) return; FX.lastCast[h.def.id] = now;
@@ -762,7 +762,7 @@ function fxSkill(h, sk, target) {
 }
 function fxHit(e, dmg) {
   const now = performance.now(); if (now - FX.lastHit < 90) return; FX.lastHit = now;
-  fxPlay(Math.random() < .5 ? 'hit' : 'hit2', e.pos, Math.min(1.8, .7 + dmg / 140), 1.4, 1);
+  fxPlay(Math.random() < .5 ? 'hit' : 'hit2', e.pos, Math.min(1.2, .6 + dmg / 200), 1.4, 1);
 }
 
 function frame() {
