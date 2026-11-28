@@ -342,7 +342,7 @@ function stageFlow(dt) {
   } else if (G.state === 'fight' || G.state === 'boss') {
     if (!alive.some(e => e.pos.x < 12) && (alive.length || G.spawnQ.length)) { G.marching = true; advance(dt); }
     if (!alive.length && !G.spawnQ.length) {
-      G.heroes.forEach(h => { if (!h.alive) { h.alive = true; h.hp = h.maxhp * .4; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); } else h.hp = Math.min(h.maxhp, h.hp + h.maxhp * .25); });
+      G.heroes.forEach(h => { if (!h.alive) { h.alive = true; h.hp = h.maxhp * .4; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); } else h.hp = Math.min(h.maxhp, h.hp + h.maxhp * Math.min(.4, .03 + .025 * G.camp.dress)); });
       G.waveActive = false; G.stT = 0; G.packsDone++; autoCamp();
       if (G.state === 'boss') { G.boss = null; G.packsDone = 4; G.state = 'relight'; G.maxStage = Math.max(G.maxStage, G.wave); toast('길목의 등불에 불을 붙입니다'); G.heroes.forEach(h => { h.alive = true; h.hp = h.maxhp; h.inst.wrap.visible = true; }); G.tonics = maxTonics(); }
       else { G.state = 'breather'; }
@@ -456,7 +456,7 @@ function recalcHero(h) {
   const n = k => SLOTS.reduce((c, sl) => c + (g[sl[0]] && g[sl[0]].sp === k ? 1 : 0), 0);
   const nm = { atk: 1 + w / 100, hp: 1 + a / 100, skill: 1 + t / 100, rate: Math.pow(1.12, n('haste')), cdr: Math.pow(.88, n('cdr')), ward: Math.pow(.9, n('ward')), silver: Math.pow(1.2, n('silver')) };
   const o = h.gm || { hp: 1 }; const k = nm.hp / o.hp; h.maxhp *= k; h.hp *= k; h.gm = nm;
-  G.silverMul = G.heroes.reduce((m, x) => m * (x.gm ? x.gm.silver : 1), 1);
+  G.silverMul = (1 + .2 * G.heroes.reduce((c, x) => c + SLOTS.reduce((q, sl) => q + ((x.gear || {})[sl[0]] && x.gear[sl[0]].sp === 'silver' ? 1 : 0), 0), 0));
 }
 const itemName = it => `${GRADES[it.g][0]} ${SLOTS.find(x => x[0] === it.slot)[1]}`;
 function dropLoot(e) {
@@ -478,7 +478,7 @@ function dropLoot(e) {
 const CAMP = [['whet', '숫돌', '공격력', 8, 45, 1], ['dress', '붕대', '체력', 8, 45, 1.05], ['tonic', '탕약', '탕약 개수와 회복량', 1, 70, 1.7]];
 const campCost = id => { const c = CAMP.find(x => x[0] === id); return Math.round(c[4] * Math.pow(1.42, G.camp[id])); };
 function buyCamp(id) {
-  const c = CAMP.find(x => x[0] === id), n = G.camp[id]; G.earned -= campCost(id); G.camp[id]++;
+  const c = CAMP.find(x => x[0] === id), n = G.camp[id]; if (G.earned < campCost(id)) return false; G.earned -= campCost(id); G.camp[id]++;
   if (id === 'whet') G.bonus.atk *= (1 + .08 * (n + 1)) / (1 + .08 * n);
   else if (id === 'dress') { const k = (1 + .08 * (n + 1)) / (1 + .08 * n); G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
   else if (id === 'oil') G.bonus.cdr *= (1 + .06 * n) / (1 + .06 * (n + 1));
