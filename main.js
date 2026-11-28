@@ -13,6 +13,7 @@ const Q = new URLSearchParams(location.search);
 const SAVE_KEY = 'riftbound.v1';
 let save = { embers: 30, unlocked: ['w_medieval', 'm_king', 'w_soldier', 'w_witch', 'm_farmer', 'w_punk'], party: [], best: 0 };
 try { Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) {}
+save.boons = save.boons || {};
 if (Q.get('unlock')) save.unlocked = HEROES.map(h => h.id);
 const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} };
 
@@ -236,7 +237,7 @@ async function startGame() {
   $('loading').classList.remove('hidden');
   if (G) cleanup();
   const S = computeSynergy(selected);
-  G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, xp: 0, level: 1, pendingCards: 0, cardStack: {}, holdCount: 0, st: { downs: 0, minHp: 1, t: 0 }, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null };
+  G = { S, heroes: [], enemies: [], proj: [], fx: [], turrets: [], timers: [], wave: 0, kills: 0, earned: 0, lantern: 100, lanternMax: 100, over: false, waveActive: false, spawnQ: [], flames: 3, W: 0, state: 'init', packs: [], packNo: 0, packsDone: 0, marching: false, stT: 0, nextW: 0, t: 0, camp: { whet: 0, dress: 0, oil: 0, tonic: 0 }, tonics: 2, loot: [], relics: 0, maxStage: 0, silverMul: 1, xp: 0, level: 1, pendingCards: 0, cardStack: {}, holdCount: 0, st: { downs: 0, minHp: 1, t: 0 }, bonus: { atk: 1, hp: 1, rate: 1, speed: 1, cdr: 1, gold: 1 }, boss: null };
   for (let i = 0; i < selected.length; i++) {
     const def = heroById[selected[i]]; const gltf = await loadModel(def.file);
     const inst = makeInstance(gltf, 1.75, 'y', 0);
@@ -250,8 +251,10 @@ async function startGame() {
   $('menu').classList.add('hidden'); $('modal').classList.add('hidden'); $('hud').classList.remove('hidden'); $('loading').classList.add('hidden');
   $('stick').classList.toggle('hidden', !('ontouchstart' in window));
   updateHUD();
-  const startWave = parseInt(Q.get('wave') || '1', 10);
-  G.wave = Math.max(1, startWave);
+  G.bonus.atk *= 1 + .06 * boonLv('dmg'); G.bonus.gold *= 1 + .1 * boonLv('silver'); G.bonus.xp = (G.bonus.xp || 1) * (1 + .08 * boonLv('xp'));
+  { const k = 1 + .06 * boonLv('hp'); G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
+  const startWave = parseInt(Q.get('wave') || '0', 10) || (1 + Math.min(boonLv('start'), Math.max(0, (save.best || 0) - 3)));
+  G.wave = Math.max(1, startWave); G.maxStage = G.wave - 1;
   beginStage();
 }
 function cleanup() {
@@ -308,7 +311,7 @@ const WALK = 3.4;
 const CEN = new THREE.Vector3(), EAST = new THREE.Vector3(1, 0, 0);
 // ----- stage flow: march along the road -> 3 packs -> stage boss -> relight -> pick a boon -> next stage -----
 async function beginStage() {
-  G.st = { downs: 0, minHp: 1, t: 0 };
+  G.st = { downs: 0, minHp: 1, t: 0 }; G.loot = [];
   const zi = Math.floor((G.wave - 1) / 5);
   if (G.zone !== zi) { G.zone = zi; buildWorld(zi); if ((G.wave - 1) % 5 === 0) setTimeout(() => toast(`구역 ${zi % 5 + 1}: ${ZONES[zi % 5].name}`), 1700); }
   const all = waveComposition(G.wave), per = Math.ceil(all.length / 3);
@@ -340,8 +343,8 @@ function stageFlow(dt) {
     if (!alive.some(e => e.pos.x < 12) && (alive.length || G.spawnQ.length)) { G.marching = true; advance(dt); }
     if (!alive.length && !G.spawnQ.length) {
       G.heroes.forEach(h => { if (!h.alive) { h.alive = true; h.hp = h.maxhp * .4; h.inst.wrap.visible = true; play(h.inst, h.clips.idle); } else h.hp = Math.min(h.maxhp, h.hp + h.maxhp * .25); });
-      G.waveActive = false; G.stT = 0; G.packsDone++;
-      if (G.state === 'boss') { G.boss = null; G.packsDone = 4; G.state = 'relight'; toast('길목의 등불에 불을 붙입니다'); }
+      G.waveActive = false; G.stT = 0; G.packsDone++; autoCamp();
+      if (G.state === 'boss') { G.boss = null; G.packsDone = 4; G.state = 'relight'; G.maxStage = Math.max(G.maxStage, G.wave); toast('길목의 등불에 불을 붙입니다'); G.heroes.forEach(h => { h.alive = true; h.hp = h.maxhp; h.inst.wrap.visible = true; }); G.tonics = maxTonics(); }
       else { G.state = 'breather'; }
     }
   } else if (G.state === 'breather') {
@@ -369,7 +372,7 @@ function spawnEnemy(key) {
 function nearest(list, p, maxd = 1e9) { let b = null, bd = maxd; for (const o of list) { if (o.alive === false) continue; const dd = o.pos.distanceTo(p); if (dd < bd) { bd = dd; b = o; } } return b; }
 function damageEnemy(e, dmg) {
   if (!e.alive) return; e.hp -= dmg; e.hitFlash = .12; dmgText(e.pos, dmg);
-  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
+  if (e.hp <= 0) { e.alive = false; e.dying = 1; G.kills++; const gb = 1 + G.heroes.reduce((a, h) => a + (h.alive ? (h.def.goldBonus || 0) : 0), 0); const held = G.holdCount > 0 ? .8 : 1; dropLoot(e); const gain = Math.ceil(e.def.reward * G.S.gold * G.bonus.gold * gb * held * (G.silverMul || 1)); G.earned += gain; addXp(Math.max(1, e.def.reward * .9) * Math.pow(1.13, G.wave - 1) * (G.bonus.xp || 1) * held); if (e.inst.cur) e.inst.cur.paused = true; }
 }
 const dmgLayer = document.createElement('div'); dmgLayer.style.cssText = 'position:fixed;inset:0;pointer-events:none;overflow:hidden'; document.body.appendChild(dmgLayer);
 function dmgText(pos, dmg) {
@@ -379,7 +382,7 @@ function dmgText(pos, dmg) {
   dmgLayer.appendChild(el); requestAnimationFrame(() => { el.style.transform = 'translateY(-26px)'; el.style.opacity = 0; }); setTimeout(() => el.remove(), 650);
 }
 function damageHero(h, dmg) {
-  if (!h.alive) return; h.hp -= dmg * G.S.taken;
+  if (!h.alive) return; h.hp -= dmg * G.S.taken * (h.gm ? h.gm.ward : 1);
   if (h.hp <= 0) { h.hp = 0; h.alive = false; G.st.downs++; play(h.inst, h.clips.die, { loop: false }); }
   else if (h.busy <= 0 && Math.random() < .15) { h.busy = .4; play(h.inst, h.clips.hit, { loop: false }); }
 }
@@ -393,11 +396,11 @@ function shoot(from, to, dmg, color, onHit) {
   m.position.set(from.x, 1.2, from.z); scene.add(m);
   G.proj.push({ mesh: m, target: to, dmg, speed: 26, onHit });
 }
-const teamAtk = h => h.def.dmg * (h.mul || 1) * G.bonus.atk * G.S.dmg * (h.def.ranged ? G.S.ranged : 1);
+const teamAtk = h => h.def.dmg * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.bonus.atk * G.S.dmg * (h.def.ranged ? G.S.ranged : 1);
 
 function heroAttack(h, tgt) {
   const d = h.def; const clip = h.attackClips[Math.floor(Math.random() * h.attackClips.length)];
-  h.atkCd = 1 / (d.rate * G.S.rate * G.bonus.rate * (h.buffT > 0 ? 1.25 : 1)); h.busy = Math.min(.45, h.atkCd * .9);
+  h.atkCd = 1 / (d.rate * G.S.rate * G.bonus.rate * (h.gm ? h.gm.rate : 1) * (h.buffT > 0 ? 1.25 : 1)); h.busy = Math.min(.45, h.atkCd * .9);
   const a = play(h.inst, clip, { loop: false, fade: .08, speed: 1.4 });
   const crit = Math.random() < (d.crit || 0.05) ? 2 : 1;
   const dmg = teamAtk(h) * crit;
@@ -405,7 +408,7 @@ function heroAttack(h, tgt) {
   else after(.2, () => { if (!tgt.alive) return; damageEnemy(tgt, dmg); if (d.cleave) for (const e of G.enemies) if (e !== tgt && e.alive && e.pos.distanceTo(h.pos) < d.range + 1.2) damageEnemy(e, dmg * .5); });
 }
 function heroSkill(h) {
-  const sk = h.def.skill; const S = G.S; let used = false; const AT = G.bonus.atk * (h.mul || 1);
+  const sk = h.def.skill; const S = G.S; let used = false; const AT = G.bonus.atk * (h.mul || 1) * (h.gm ? h.gm.atk * h.gm.skill : 1);
   const live = G.enemies.filter(e => e.alive);
   const hurt = G.heroes.filter(x => x.alive && x.hp < x.maxhp * .75);
   switch (sk.type) {
@@ -420,24 +423,80 @@ function heroSkill(h) {
     case 'aura': G.heroes.forEach(x => x.buffT = 5); ring(h.pos, 2.6, 0xffe08a, .6); used = !!live.length; if (used) G.bonus.atk *= 1; break;
     case 'gold': G.earned += 0; used = false; h.skCd = 9999; break;
   }
-  if (used) { h.skCd = sk.cd * S.cdr * G.bonus.cdr; if (h.clips.cast && sk.type !== 'dash') { h.busy = .5; play(h.inst, h.clips.cast, { loop: false, fade: .1 }); } }
+  if (used) { h.skCd = sk.cd * S.cdr * G.bonus.cdr * (h.gm ? h.gm.cdr : 1); if (h.clips.cast && sk.type !== 'dash') { h.busy = .5; play(h.inst, h.clips.cast, { loop: false, fade: .1 }); } }
   else h.skCd = Math.min(h.skCd, 0) + .5;
 }
 
 function end(win) {
-  G.over = true; const gain = G.earned; save.embers += gain; save.best = Math.max(save.best, G.wave - 1); persist();
+  G.over = true; const gain = Math.max(1, Math.floor(Math.pow(Math.max(0, G.maxStage), 1.25) * .75 + G.relics));
+  save.embers += gain; save.best = Math.max(save.best || 0, G.maxStage); persist();
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>등불이 꺼졌습니다</h1><p>도달 스테이지 ${G.wave} · 처치 ${G.kills} · 획득 엠버 ${gain}</p><button class="mbtn" id="again">다시 출정</button><br><button class="ghost" id="tomenu">영웅 선택으로</button>`;
-  $('again').onclick = () => startGame(); $('tomenu').onclick = () => { m.classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden'); cleanup(); renderMenu(); };
+  const render = () => {
+    m.innerHTML = `<h1>등불이 꺼졌습니다</h1><p>도달 스테이지 ${G.maxStage} · 레벨 ${G.level} · 처치 ${G.kills} · 유물 ${G.relics} · 획득 엠버 ${gain}</p><p>보유 엠버 <b>${save.embers}</b> (영구 강화: 다음 런부터 계속 적용)</p>` +
+      BOONS.map(b => { const lv = boonLv(b[0]), mx = lv >= b[4]; return `<button class="opt" data-b="${b[0]}" ${mx || save.embers < boonCost(b[0]) ? 'disabled' : ''}><b>${b[1]}</b> ${lv}/${b[4]}<br>${b[2]} · ${mx ? '최대' : '비용 ' + boonCost(b[0])}</button>`; }).join('') +
+      '<br><button class="mbtn" id="again">다시 출정</button><br><button class="ghost" id="tomenu">영웅 선택으로</button>';
+    m.querySelectorAll('[data-b]').forEach(el => el.onclick = () => { const id = el.dataset.b, c = boonCost(id); if (save.embers >= c && boonLv(id) < BOONS.find(x => x[0] === id)[4]) { save.embers -= c; save.boons[id] = boonLv(id) + 1; persist(); render(); } });
+    $('again').onclick = () => startGame(); $('tomenu').onclick = () => { m.classList.add('hidden'); $('hud').classList.add('hidden'); $('menu').classList.remove('hidden'); cleanup(); renderMenu(); };
+  };
+  render();
 }
-const GRADES = [['낡은', 1, '#aaa'], ['쓸 만한', 1.5, '#7fd37f'], ['정교한', 2.2, '#6bb8ff'], ['희귀한', 3.2, '#c78bff'], ['유물', 4.5, '#ffb347']];
-const GEAR = [['무기', '공격력', g => { G.bonus.atk *= 1 + .03 * g[1]; }], ['방어구', '체력', g => { const k = 1 + .04 * g[1]; G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }], ['장신구', '공격 속도', g => { G.bonus.rate *= 1 + .025 * g[1]; }]];
-function rollGear() {
-  const r = Math.random() + G.wave * .03; const gi = r > 1.25 ? 4 : r > .95 ? 3 : r > .65 ? 2 : r > .3 ? 1 : 0;
-  const g = GRADES[gi], k = GEAR[Math.floor(Math.random() * 3)]; k[2](g);
-  (G.gear = G.gear || []).push(`${g[0]} ${k[0]}`);
-  return `<p style="color:${g[2]}">전리품: ${g[0]} ${k[0]} (${k[1]} +${Math.round((k[0] === '방어구' ? .04 : k[0] === '무기' ? .03 : .025) * g[1] * 100)}%)</p>`;
+// ---------- 영웅별 장비 (무기/방어구/장신구, 4등급, 유물은 특수 효과) ----------
+const GRADES = [['낡은', 1, '#a8a290'], ['단련된', 1.45, '#7fb4d6'], ['도금된', 2, '#e0a33c'], ['유물', 2.9, '#ff7a3a']];
+const SLOTS = [['weapon', '무기', '공격력'], ['armour', '방어구', '체력'], ['trinket', '장신구', '스킬 위력']];
+const SPECIALS = [['haste', '공격 속도 +12%'], ['cdr', '스킬 재사용 -12%'], ['silver', '은화 +20%'], ['ward', '받는 피해 -10%']];
+function makeItem(slot, stage, minGrade) {
+  const r = Math.random(); let g = r < .015 ? 3 : r < .1 ? 2 : r < .38 ? 1 : 0; g = Math.max(g, minGrade || 0);
+  const pow = Math.max(1, Math.round(7 * Math.pow(1.105, stage - 1) * GRADES[g][1] * (.88 + Math.random() * .24)));
+  const it = { slot, g, pow }; if (g === 3) { const sp = SPECIALS[Math.floor(Math.random() * SPECIALS.length)]; it.sp = sp[0]; it.spT = sp[1]; }
+  return it;
 }
+function recalcHero(h) {
+  const g = h.gear || {}, w = g.weapon ? g.weapon.pow : 0, a = g.armour ? g.armour.pow : 0, t = g.trinket ? g.trinket.pow : 0;
+  const n = k => SLOTS.reduce((c, sl) => c + (g[sl[0]] && g[sl[0]].sp === k ? 1 : 0), 0);
+  const nm = { atk: 1 + w / 100, hp: 1 + a / 100, skill: 1 + t / 100, rate: Math.pow(1.12, n('haste')), cdr: Math.pow(.88, n('cdr')), ward: Math.pow(.9, n('ward')), silver: Math.pow(1.2, n('silver')) };
+  const o = h.gm || { hp: 1 }; const k = nm.hp / o.hp; h.maxhp *= k; h.hp *= k; h.gm = nm;
+  G.silverMul = G.heroes.reduce((m, x) => m * (x.gm ? x.gm.silver : 1), 1);
+}
+const itemName = it => `${GRADES[it.g][0]} ${SLOTS.find(x => x[0] === it.slot)[1]}`;
+function dropLoot(e) {
+  const boss = !!e.def.boss, elite = !boss && e.def.reward >= 15;
+  const p = boss ? 1 : elite ? .3 : .085 * (G.wave === 1 && G.packNo <= 1 ? 1.6 : 1);
+  const n = boss ? 2 + (Math.random() < .5 ? 1 : 0) : (Math.random() < p ? 1 : 0);
+  for (let i = 0; i < n; i++) {
+    const h = G.heroes[Math.floor(Math.random() * G.heroes.length)], slot = SLOTS[Math.floor(Math.random() * 3)][0], it = makeItem(slot, G.wave, boss ? 1 : 0);
+    h.gear = h.gear || {}; const cur = h.gear[slot], sm = G.silverMul || 1;
+    if (!cur || it.pow > cur.pow || (it.g === 3 && cur.g < 3 && it.pow > cur.pow * .85)) {
+      if (cur) G.earned += Math.round(cur.pow * .6 * sm);
+      h.gear[slot] = it; recalcHero(h); if (it.g === 3) G.relics++;
+      G.loot.push(`<span style="color:${GRADES[it.g][2]}">${h.def.name}: ${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}</span>`);
+      toast(`${h.def.name} ${itemName(it)} 획득`);
+    } else { G.earned += Math.round(it.pow * .6 * sm * Math.pow(1.02, G.wave)); }
+  }
+}
+// ---------- 은화로 캠프 자동 강화 ----------
+const CAMP = [['whet', '숫돌', '공격력', 8, 45, 1], ['dress', '붕대', '체력', 8, 45, 1.05], ['oil', '램프유', '스킬 재사용 단축', 6, 60, 1.5], ['tonic', '탕약', '탕약 개수와 회복량', 1, 70, 1.7]];
+const campCost = id => { const c = CAMP.find(x => x[0] === id); return Math.round(c[4] * Math.pow(1.42, G.camp[id])); };
+function buyCamp(id) {
+  const c = CAMP.find(x => x[0] === id), n = G.camp[id]; G.earned -= campCost(id); G.camp[id]++;
+  if (id === 'whet') G.bonus.atk *= (1 + .08 * (n + 1)) / (1 + .08 * n);
+  else if (id === 'dress') { const k = (1 + .08 * (n + 1)) / (1 + .08 * n); G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
+  else if (id === 'oil') G.bonus.cdr *= (1 + .06 * n) / (1 + .06 * (n + 1));
+  else G.tonics = Math.min(maxTonics(), G.tonics + 1);
+  toast(`캠프: ${c[1]} ${G.camp[id]}`);
+}
+const maxTonics = () => Math.min(6, 2 + Math.floor((G.camp.tonic + 1) / 2));
+function autoCamp() {
+  for (let g = 0; g < 20; g++) { let best = null, bc = 1e18; for (const c of CAMP) { const cost = campCost(c[0]) * c[5]; if (cost < bc) { bc = cost; best = c; } } if (best && G.earned >= campCost(best[0])) buyCamp(best[0]); else break; }
+}
+function useTonic(dt) {
+  G.tonicCd = (G.tonicCd || 0) - dt; if (G.tonics <= 0 || G.tonicCd > 0) return;
+  const h = G.heroes.find(x => x.alive && x.hp < x.maxhp * .33); if (!h) return;
+  G.tonics--; G.tonicCd = 5; h.hp = Math.min(h.maxhp, h.hp + h.maxhp * Math.min(.7, .35 + .025 * G.camp.tonic)); toast(`${h.def.name} 탕약 사용`);
+}
+// ---------- 런 종료: 엠버 정산 + 영구 강화 ----------
+const BOONS = [['dmg', '분노의 엠버', '모든 런 공격력 +6%', 2, 20], ['hp', '인내의 엠버', '모든 런 체력 +6%', 2, 20], ['silver', '풍요의 엠버', '모든 런 은화 +10%', 2, 10], ['xp', '기억의 엠버', '모든 런 경험치 +8%', 2, 10], ['start', '길의 엠버', '한 스테이지 앞에서 시작', 4, 12]];
+const boonLv = id => save.boons[id] || 0;
+const boonCost = id => Math.round(BOONS.find(b => b[0] === id)[3] * (1 + .6 * boonLv(id)));
 const xpNeed = L => Math.round(26 * Math.pow(1.4, L - 1) + 8 * (L - 1));
 function addXp(x) { G.xp += x; let n = xpNeed(G.level); while (G.xp >= n) { G.xp -= n; G.level++; G.pendingCards++; toast(`레벨 ${G.level}`); n = xpNeed(G.level); } }
 // 레벨업 카드: 파티 공용 + 편성에 있는 역할별 카드. 같은 카드는 3번까지 중첩.
@@ -446,7 +505,7 @@ function cardPool() {
   pool.push({ id: 'p:dmg', name: '날 선 칼날', desc: '파티 전체 공격력 +10%', apply: G => G.bonus.atk *= 1.1 });
   pool.push({ id: 'p:hp', name: '단련', desc: '파티 전체 체력 +12%', apply: G => G.heroes.forEach(h => { h.maxhp *= 1.12; h.hp *= 1.12; }) });
   pool.push({ id: 'p:haste', name: '빠른 행군', desc: '파티 전체 공격 속도 +7%', apply: G => G.bonus.rate *= 1.07 });
-  pool.push({ id: 'p:gold', name: '약탈꾼', desc: '획득 엠버 +25%', apply: G => G.bonus.gold *= 1.25 });
+  pool.push({ id: 'p:gold', name: '약탈꾼', desc: '획득 은화 +25%', apply: G => G.bonus.gold *= 1.25 });
   const roles = [...new Set(G.heroes.map(h => h.def.role))];
   for (const r of roles) {
     const rn = G.heroes.find(h => h.def.role === r).def.roleName;
@@ -481,17 +540,17 @@ function danger(next) {
 function stewardPush() { const d = danger(true)[1]; if (d === 'SAFE') return true; if (d === 'RISKY') return G.flames >= 2 || G.holdCount >= 2; return G.holdCount >= 3 + (3 - G.flames); }
 function offerUpgrade() {
   G.waveActive = false; G.paused = true;
-  let extra = rollGear();
+  let extra = G.loot.length ? '<p>' + G.loot.join('<br>') + '</p>' : '';
   if (G.wave % 5 === 0) {
     const locked = HEROES.filter(h => !save.unlocked.includes(h.id)).slice(0, 3);
-    locked.forEach(h => save.unlocked.push(h.id)); G.earned += 25; persist();
+    locked.forEach(h => save.unlocked.push(h.id)); persist();
     const zn = ZONES[(G.wave / 5 - 1) % 5];
-    extra = `<p style="color:#ffd36b">구역 클리어: ${zn.name}. 엠버 +25${locked.length ? '<br>영웅 해금: ' + locked.map(h => h.name).join(', ') : ''}</p>`;
+    extra += `<p style="color:#ffd36b">구역 클리어: ${zn.name}.${locked.length ? '<br>영웅 해금: ' + locked.map(h => h.name).join(', ') : ''}</p>`;
     if (G.wave === 25 && !G.won) { G.won = true; extra += '<p style="color:#8fe0ff">등불의 심장을 지켜냈습니다! 계속하면 무한 모드입니다.</p>'; }
   }
   const dg = danger(true), rec = stewardPush();
   const m = $('modal'); m.classList.remove('hidden');
-  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>다음 구간 위험도: <b style="color:${dg[2]}">${dg[0]}</b> · 레벨 ${G.level}</p><button class="opt" data-go="1"><b>전진${rec ? ' (추천)' : ''}</b><br>다음 스테이지로 나아갑니다</button><button class="opt" data-go="0"><b>같은 구간 반복${rec ? '' : ' (추천)'}</b><br>경험치·엠버 80%, 장비와 경험치를 더 모읍니다</button><p id="cd" style="opacity:.7;font-size:12px"></p>`;
+  m.innerHTML = `<h1>스테이지 ${G.wave} 클리어</h1>${extra}<p>다음 구간 위험도: <b style="color:${dg[2]}">${dg[0]}</b> · 레벨 ${G.level}</p><button class="opt" data-go="1"><b>전진${rec ? ' (추천)' : ''}</b><br>다음 스테이지로 나아갑니다</button><button class="opt" data-go="0"><b>같은 구간 반복${rec ? '' : ' (추천)'}</b><br>경험치·은화 80%, 장비와 경험치를 더 모읍니다</button><p id="cd" style="opacity:.7;font-size:12px"></p>`;
   let done = false, stop = null;
   const go = push => { if (done) return; done = true; stop(); m.classList.add('hidden'); G.paused = false; if (push) { G.holdCount = 0; nextWave(); } else { G.holdCount++; G.state = 'init'; beginStage(); } };
   stop = countdown(m, 7, () => go(rec), '추천 선택으로 진행');
@@ -508,7 +567,7 @@ function update(dt) {
   // timers
   for (const t of G.timers) t.t -= dt; const due = G.timers.filter(t => t.t <= 0); G.timers = G.timers.filter(t => t.t > 0); due.forEach(t => t.fn());
   // spawning
-  CEN.set(0, 0, roadZ(G.W)); stageFlow(dt);
+  CEN.set(0, 0, roadZ(G.W)); stageFlow(dt); useTonic(dt);
   { G.st.t += dt; const ht = G.heroes.reduce((a, h) => a + (h.alive ? h.hp : 0), 0) / Math.max(1, G.heroes.reduce((a, h) => a + h.maxhp, 0)); if (ht < G.st.minHp) G.st.minHp = ht; if (G.pendingCards > 0 && !G.paused && (G.state === 'walk' || G.state === 'breather')) openCards(); }
   if (G.waveActive && G.spawnQ.length) { G.spawnT -= dt; if (G.spawnT <= 0) { const k = G.spawnQ.shift(); spawnEnemy(k); G.spawnT = Math.max(.25, .9 - G.wave * .02); } }
   const living = G.heroes.filter(h => h.alive);
