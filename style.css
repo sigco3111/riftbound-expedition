@@ -79,3 +79,5 @@ details{font-size:11px;color:#8e98b5;max-width:700px;margin-top:6px}
 
 #campBtn{background:#27314b;color:#ffd36b;border:1px solid #4a5780;border-radius:8px;padding:6px 10px;font-size:13px}
 #campBtn.ready{background:#2d5a2a;color:#fff;border-color:#8fe388;box-shadow:0 0 10px #6fd36a}
+#hubClose{position:sticky;bottom:8px;z-index:5;box-shadow:0 0 14px #000}
+#modal{padding-bottom:70px}

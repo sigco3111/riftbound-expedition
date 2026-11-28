@@ -508,7 +508,7 @@ function dropLoot(e) {
       h.gear[slot] = it; recalcHero(h); if (it.g === 3) G.relics++;
       G.loot.push(`<span style="color:${GRADES[it.g][2]}">${h.def.name}: ${itemName(it)} +${it.pow}%${it.spT ? ' (' + it.spT + ')' : ''}</span>`);
       toast(`${h.def.name} ${itemName(it)} 획득`);
-    } else { const v = Math.round(it.pow * .6 * sm * Math.pow(1.02, G.wave)); G.bag = G.bag || []; it.hi = G.heroes.indexOf(h); G.bag.push(it); if (G.bag.length > 10) { const o = G.bag.shift(); G.earned += Math.round(o.pow * .6 * sm); } }
+    } else { const v = Math.round(it.pow * .6 * sm * Math.pow(1.02, G.wave)); G.bag = G.bag || []; it.hi = G.heroes.indexOf(h); if (G.bag.length < 60) G.bag.push(it); else { G.earned += v; toast('가방이 가득 차 장비가 판매되었습니다 (정비에서 정리 가능)'); } }
   }
 }
 // ---------- 은화로 캠프 자동 강화 ----------
@@ -533,16 +533,16 @@ function useTonic(dt) {
 }
 
 // ---------- 정비 허브: 언제든 열 수 있고, 열려 있는 동안 전투/행군/자동 타이머가 멈춘다 ----------
-const trainCost = (h, k) => Math.round(35 * Math.pow(1.38, (h.tr || {})[k] | 0) * (k === 'hp' ? 1 : 1.1));
+const trainCost = (h, k) => Math.round(35 * Math.pow(1.38, (h.tr || {})[k] | 0) * (k === 'hp' ? 1 : k === 'sk' ? 1.3 : 1.1));
 function train(h, k, free) {
   h.tr = h.tr || {}; const n = h.tr[k] | 0; const c = trainCost(h, k); if (!free) { if (G.earned < c) return false; G.earned -= c; }
   h.tr[k] = n + 1; const r = (1 + .06 * (n + 1)) / (1 + .06 * n);
-  if (k === 'atk') h.mul = (h.mul || 1) * r; else { h.maxhp *= r; h.hp *= r; } return true;
+  if (k === 'atk') h.mul = (h.mul || 1) * r; else if (k === 'sk') { const q = (1 + .08 * (n + 1)) / (1 + .08 * n); h.skMul = (h.skMul || 1) * q; } else { h.maxhp *= r; h.hp *= r; } return true;
 }
-function planCamp() { // 추천 정비: 구매 순서를 시뮬레이션만 하고 실제로는 적용하지 않는다
-  let silver = G.earned; const lv = { ...G.camp }, plan = [], cost = id => { const c = CAMP.find(x => x[0] === id); return Math.round(c[4] * Math.pow(1.42, lv[id])); }; let total = 0;
-  for (let g = 0; g < 20; g++) { let best = null, bc = 1e18; for (const c of CAMP) { const k = cost(c[0]) * c[5]; if (k < bc) { bc = k; best = c; } } if (best && silver >= cost(best[0])) { const k = cost(best[0]); silver -= k; total += k; lv[best[0]]++; plan.push(`${best[1]} ${lv[best[0]]}`); } else break; }
-  return { plan, total };
+function planCamp() { // 추천 정비: 구매 순서를 시뮬레이션만 하고 적용하지 않는다. 항목별로 묶어 비용 합계를 보여준다.
+  let silver = G.earned; const lv = { ...G.camp }, cost = id => { const c = CAMP.find(x => x[0] === id); return Math.round(c[4] * Math.pow(1.42, lv[id])); }, per = {}; let total = 0;
+  for (let g = 0; g < 20; g++) { let best = null, bc = 1e18; for (const c of CAMP) { const k = cost(c[0]) * c[5]; if (k < bc) { bc = k; best = c; } } if (best && silver >= cost(best[0])) { const k = cost(best[0]), id = best[0]; silver -= k; total += k; const p = per[id] = per[id] || { name: best[1], from: lv[id], n: 0, c: 0 }; p.n++; p.c += k; lv[id]++; } else break; }
+  return { plan: Object.values(per).map(p => `${p.name} Lv ${p.from}→${p.from + p.n} (${p.c} 은화)`), total };
 }
 let hubOpen = false;
 function campHint() { const b = $('campBtn'); if (b) { b.classList.add('ready'); b.textContent = '정비 ●'; } toast('정비 가능 (우상단 정비 버튼)'); }
@@ -557,19 +557,20 @@ function openHub(onBack) {
     if (tab === -1) {
       body = CAMP.map(c => `<button class="opt" data-c="${c[0]}" ${G.earned < campCost(c[0]) ? 'disabled' : ''}><b>${c[1]}</b> Lv ${G.camp[c[0]]} · ${c[2]}<br>비용 ${campCost(c[0])} 은화</button>`).join('');
       pv = planCamp();
-      body += `<p style="font-size:13px">추천 정비: ${pv.plan.length ? pv.plan.join(', ') + ` (총 ${pv.total} 은화)` : '지금은 살 수 있는 것이 없음'}</p><button class="opt" data-rec="1" ${pv.plan.length ? '' : 'disabled'}><b>추천대로 정비</b><br>위 목록을 그대로 구매합니다</button><button class="ghost" id="acBtn">자동 정비: ${save.autoCamp ? '켜짐(팩 종료마다 추천 구매)' : '꺼짐'}</button>`;
+      body += `<p style="font-size:13px">추천 정비: ${pv.plan.length ? '<br>' + pv.plan.join('<br>') + `<br><b>합계 ${pv.total} 은화</b> (보유 ${Math.round(G.earned)})` : '지금은 살 수 있는 것이 없음'}</p><button class="opt" data-rec="1" ${pv.plan.length ? '' : 'disabled'}><b>추천대로 정비</b><br>위 목록을 그대로 구매합니다</button><button class="ghost" id="acBtn">자동 정비: ${save.autoCamp ? '켜짐(팩 종료마다 추천 구매)' : '꺼짐'}</button>`;
     } else {
       const h = G.heroes[tab], g = h.gear || {};
       body = `<p><b>${h.def.name}</b> · 체력 ${Math.round(h.maxhp)} · 공격 배율 ${(h.mul || 1).toFixed(2)}</p>` +
-        ['atk', 'hp'].map(k => `<button class="opt" data-tr="${k}" ${G.earned < trainCost(h, k) ? 'disabled' : ''}><b>${k === 'atk' ? '공격 훈련' : '체력 훈련'}</b> Lv ${(h.tr || {})[k] | 0} · ${k === 'atk' ? '공격력' : '체력'} +6%<br>비용 ${trainCost(h, k)} 은화</button>`).join('') +
+        ['atk', 'hp', 'sk'].map(k => `<button class="opt" data-tr="${k}" ${G.earned < trainCost(h, k) ? 'disabled' : ''}><b>${k === 'atk' ? '공격 훈련' : k === 'hp' ? '체력 훈련' : '스킬 수련'}</b> Lv ${(h.tr || {})[k] | 0} · ${k === 'atk' ? '기본 공격력 +6%' : k === 'hp' ? '체력 +6%' : (SKILL_DESC[h.def.skill.type] || '스킬').split(':')[0] + ' 위력 +8%'}<br>비용 ${trainCost(h, k)} 은화</button>`).join('') +
         `<p style="font-size:13px">장착: ${SLOTS.map(sl => sl[1] + ' ' + gearTxt(g[sl[0]])).join(' / ')}</p>` +
-        (G.bag || []).map((it, bi) => ({ it, bi })).filter(x => x.it.hi === tab).map(x => `<button class="opt" data-eq="${x.bi}"><b>${gearTxt(x.it)}</b><br>장착 (현재 ${gearTxt(g[x.it.slot])}는 가방으로)</button>`).join('');
+        (G.bag || []).map((it, bi) => ({ it, bi })).map(x => `<div><button class="opt" style="display:inline-block;width:min(300px,64vw)" data-eq="${x.bi}"><b>${gearTxt(x.it)}</b><br>${G.heroes[x.it.hi] ? G.heroes[x.it.hi].def.name + ' 드랍' : ''} → ${h.def.name} 장착 (현재 ${gearTxt(g[x.it.slot])}는 가방으로)</button><button class="ghost" data-sell="${x.bi}">판매 ${Math.round(x.it.pow * .6 * (G.silverMul || 1))}</button></div>`).join('');
     }
     m.innerHTML = `<h1>정비</h1><p>은화 <b>${Math.round(G.earned)}</b> · 열려 있는 동안 전투는 멈춰 있습니다</p><div>${tabs}</div>${body}<br><button class="mbtn" id="hubClose">닫고 계속</button>`;
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = +b.dataset.t; render(); });
     m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { buyCamp(b.dataset.c); render(); });
     m.querySelectorAll('[data-tr]').forEach(b => b.onclick = () => { train(G.heroes[tab], b.dataset.tr); render(); });
-    m.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { const h = G.heroes[tab], it = G.bag[+b.dataset.eq]; G.bag.splice(+b.dataset.eq, 1); h.gear = h.gear || {}; const cur = h.gear[it.slot]; if (cur) { cur.hi = tab; G.bag.push(cur); } delete it.hi; h.gear[it.slot] = it; recalcHero(h); render(); });
+    m.querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { const h = G.heroes[tab], it = G.bag[+b.dataset.eq]; G.bag.splice(+b.dataset.eq, 1); h.gear = h.gear || {}; const cur = h.gear[it.slot]; if (cur) { cur.hi = tab; if (G.bag.length < 60) G.bag.push(cur); else { G.earned += Math.round(cur.pow * .6 * (G.silverMul || 1)); } } delete it.hi; h.gear[it.slot] = it; recalcHero(h); render(); });
+    m.querySelectorAll('[data-sell]').forEach(b => b.onclick = () => { const it = G.bag[+b.dataset.sell]; if (!it) return; G.earned += Math.round(it.pow * .6 * (G.silverMul || 1)); G.bag.splice(+b.dataset.sell, 1); render(); });
     const rc = m.querySelector('[data-rec]'); if (rc) rc.onclick = () => { autoCamp(); render(); };
     const ac = $('acBtn'); if (ac) ac.onclick = () => { save.autoCamp = !save.autoCamp; persist(); render(); };
     $('hubClose').onclick = close;
@@ -651,7 +652,7 @@ function offerUpgrade() {
 // ---------- 저장 / 이어하기 (스테이지 시작 시점 스냅샷, 체력은 가득 채워 복원) ----------
 function snapshotRun() {
   if (!G || G.over || !G.heroes.length) return;
-  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, gear: G.heroes.map(h => h.gear || {}), train: G.heroes.map(h => ({ ...(h.tr || {}) })), bag: G.bag || [] };
+  save.run = { v: 1, party: G.heroes.map(h => h.def.id), wave: G.wave, maxStage: G.maxStage, level: G.level, xp: G.xp, earned: G.earned, flames: G.flames, camp: { ...G.camp }, tonics: G.tonics, relics: G.relics, kills: G.kills, holdCount: G.holdCount, pendingCards: G.pendingCards, cardStack: { ...G.cardStack }, flare: G.flare, gear: G.heroes.map(h => h.gear || {}), train: G.heroes.map(h => ({ ...(h.tr || {}) })), bag: (G.bag || []).slice(0, 60) };
   persist();
 }
 function restoreRun(R) {
@@ -661,7 +662,7 @@ function restoreRun(R) {
   G.bonus.atk *= 1 + .08 * G.camp.whet;
   { const k = 1 + .08 * G.camp.dress; G.heroes.forEach(h => { h.maxhp *= k; h.hp *= k; }); }
   G.heroes.forEach((h, i) => { h.gear = R.gear[i] || {}; recalcHero(h); });
-  G.bag = (R.bag || []).slice(0, 10); G.heroes.forEach((h, i) => { const t = (R.train || [])[i] || {}; for (let n = 0; n < (t.atk | 0); n++) train(h, 'atk', true); for (let n = 0; n < (t.hp | 0); n++) train(h, 'hp', true); });
+  G.bag = (R.bag || []).slice(0, 60); G.heroes.forEach((h, i) => { const t = (R.train || [])[i] || {}; for (let n = 0; n < (t.atk | 0); n++) train(h, 'atk', true); for (let n = 0; n < (t.hp | 0); n++) train(h, 'hp', true); for (let n = 0; n < (t.sk | 0); n++) train(h, 'sk', true); });
   G.cardStack = {};
   const pool = cardPool();
   for (const id in R.cardStack) { const c = pool.find(x => x.id === id); if (c) for (let n = 0; n < R.cardStack[id]; n++) c.apply(G); }
