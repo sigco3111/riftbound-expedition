@@ -452,6 +452,22 @@ function ring(pos, r, color, life = .45) {
   const m = new THREE.Mesh(new THREE.RingGeometry(r * .85, r, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .8, side: THREE.DoubleSide }));
   m.rotation.x = -Math.PI / 2; m.position.set(pos.x, .1, pos.z); scene.add(m); G.fx.push({ mesh: m, life, max: life, grow: r });
 }
+function stepProjectiles(dt) {
+  for (const p of G.proj) {
+    if (!p.target.alive) { p.dead = true; continue; }
+    tmp.copy(p.target.pos).setY(1); const d = tmp.clone().sub(p.mesh.position); const step = p.speed * dt;
+    if (d.length() <= step + .3) { p.onHit(p.target); projHit(p); p.dead = true; }
+    else { const dir = d.normalize(); p.mesh.position.addScaledVector(dir, step); p.mesh.lookAt(p.mesh.position.x + dir.x, p.mesh.position.y + dir.y, p.mesh.position.z + dir.z); p.tt += dt;
+      const sp = p.mesh.getObjectByName('spin'); if (sp) { sp.rotation.x += dt * 9; sp.rotation.y += dt * 7; }
+      if (p.kind === 'orb' && (p.tg = (p.tg || 0) + dt) > .02) { p.tg = 0; trailPuff(p.mesh.position, p.color, .11, .22); }
+      else if (p.kind === 'bolt' && (p.tg = (p.tg || 0) + dt) > .05) { p.tg = 0; trailPuff(p.mesh.position, 0xffe2a8, .08, .18); } }
+  }
+  G.proj = G.proj.filter(p => { if (p.dead) scene.remove(p.mesh); return !p.dead; });
+}
+function stepFx(dt) {
+  for (const f of G.fx) { f.life -= dt; const k = 1 - f.life / f.max; if (f.trail) { f.mesh.scale.setScalar(f.trail * (1 - k * .7)); f.mesh.material.opacity = .6 * (1 - k); if (f.vx !== undefined) { f.vy -= 9 * dt; f.mesh.position.x += f.vx * dt; f.mesh.position.y = Math.max(.05, f.mesh.position.y + f.vy * dt); f.mesh.position.z += f.vz * dt; } continue; } f.mesh.scale.setScalar(.3 + k * .7 + .01); f.mesh.material.opacity = Math.max(0, .8 * (1 - k)); }
+  G.fx = G.fx.filter(f => { if (f.life <= 0) scene.remove(f.mesh); return f.life > 0; });
+}
 function trailPuff(pos, color, r, life) {
   const m = new THREE.Mesh(pgeo('tp', () => new THREE.SphereGeometry(1, 8, 6)), addMat(color, .5)); m.scale.setScalar(r); m.position.copy(pos); scene.add(m);
   G.fx.push({ mesh: m, life, max: life, trail: r });
@@ -827,24 +843,14 @@ function update(dt) {
   for (let i = 0; i < G.enemies.length; i++) { const a = G.enemies[i]; if (!a.alive) continue; for (let j = i + 1; j < G.enemies.length; j++) { const b = G.enemies[j]; if (!b.alive) continue; tmp.copy(a.pos).sub(b.pos); const d = tmp.length(), r = (a.def.r + b.def.r); if (d < r && d > 1e-4) { tmp.multiplyScalar((r - d) / d * .25); a.pos.add(tmp); b.pos.sub(tmp); } } }
   G.enemies = G.enemies.filter(e => e.alive || e.dying > 0 || (scene.remove(e.inst.wrap), false));
   // projectiles
-  for (const p of G.proj) {
-    if (!p.target.alive) { p.dead = true; continue; }
-    tmp.copy(p.target.pos).setY(1); const d = tmp.clone().sub(p.mesh.position); const step = p.speed * dt;
-    if (d.length() <= step + .3) { p.onHit(p.target); projHit(p); p.dead = true; }
-    else { const dir = d.normalize(); p.mesh.position.addScaledVector(dir, step); p.mesh.lookAt(p.mesh.position.x + dir.x, p.mesh.position.y + dir.y, p.mesh.position.z + dir.z); p.tt += dt;
-      const sp = p.mesh.getObjectByName('spin'); if (sp) { sp.rotation.x += dt * 9; sp.rotation.y += dt * 7; }
-      if (p.kind === 'orb' && (p.tg = (p.tg || 0) + dt) > .02) { p.tg = 0; trailPuff(p.mesh.position, p.color, .11, .22); }
-      else if (p.kind === 'bolt' && (p.tg = (p.tg || 0) + dt) > .05) { p.tg = 0; trailPuff(p.mesh.position, 0xffe2a8, .08, .18); } }
-  }
-  G.proj = G.proj.filter(p => { if (p.dead) scene.remove(p.mesh); return !p.dead; });
+  stepProjectiles(dt);
   // turrets / traps
   for (const t of G.turrets) { t.life -= dt; t.cd -= dt;
     if (t.trap) { const hit = G.enemies.find(e => e.alive && e.pos.distanceTo(t.pos) < 1.2); if (hit) { G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < t.r && (damageEnemy(e, t.dmg), e.slow = 3)); ring(t.pos, t.r, 0xe67e22); t.life = 0; } }
     else if (t.cd <= 0) { const tg = nearest(G.enemies.filter(e => e.alive), t.pos, 14); if (tg) { t.cd = .6; shoot(t.pos, tg, t.dmg, 0x7fd0ff, e => damageEnemy(e, t.dmg), 'laser'); } } }
   G.turrets = G.turrets.filter(t => { if (t.life <= 0) scene.remove(t.mesh); return t.life > 0; });
   // fx
-  for (const f of G.fx) { f.life -= dt; const k = 1 - f.life / f.max; if (f.trail) { f.mesh.scale.setScalar(f.trail * (1 - k * .7)); f.mesh.material.opacity = .6 * (1 - k); if (f.vx !== undefined) { f.vy -= 9 * dt; f.mesh.position.x += f.vx * dt; f.mesh.position.y = Math.max(.05, f.mesh.position.y + f.vy * dt); f.mesh.position.z += f.vz * dt; } continue; } f.mesh.scale.setScalar(.3 + k * .7 + .01); f.mesh.material.opacity = Math.max(0, .8 * (1 - k)); }
-  G.fx = G.fx.filter(f => { if (f.life <= 0) scene.remove(f.mesh); return f.life > 0; });
+  stepFx(dt);
   if (!G.over && G.state !== 'wipe' && G.state !== 'init' && living.length === 0 && G.heroes.length) { G.state = 'wipe'; G.stT = 0; G.flames--; toast(G.flames > 0 ? '불꽃이 하나 꺼졌습니다' : '마지막 불꽃이 꺼졌습니다'); }
   // lantern glow
   const pulse = .85 + Math.sin(G.t * 3) * .1; lantern.userData.light.intensity = 110 * pulse * (.72 + .0933 * Math.max(0, G.flames));
