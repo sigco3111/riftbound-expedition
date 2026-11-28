@@ -452,10 +452,47 @@ function ring(pos, r, color, life = .45) {
   const m = new THREE.Mesh(new THREE.RingGeometry(r * .85, r, 40), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: .8, side: THREE.DoubleSide }));
   m.rotation.x = -Math.PI / 2; m.position.set(pos.x, .1, pos.z); scene.add(m); G.fx.push({ mesh: m, life, max: life, grow: r });
 }
-function shoot(from, to, dmg, color, onHit) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(.14, 8, 6), new THREE.MeshBasicMaterial({ color }));
+function trailPuff(pos, color, r, life) {
+  const m = new THREE.Mesh(pgeo('tp', () => new THREE.SphereGeometry(1, 8, 6)), addMat(color, .5)); m.scale.setScalar(r); m.position.copy(pos); scene.add(m);
+  G.fx.push({ mesh: m, life, max: life, trail: r });
+}
+function projHit(p) {
+  const pos = p.target.pos, c = p.color;
+  const n = p.kind === 'orb' ? 7 : 4;
+  for (let i = 0; i < n; i++) { const m = new THREE.Mesh(pgeo('tp', () => new THREE.SphereGeometry(1, 8, 6)), addMat(p.kind === 'bolt' ? 0xffe2a8 : c, .8)); m.scale.setScalar(.07); m.position.set(pos.x, 1, pos.z); scene.add(m); G.fx.push({ mesh: m, life: .3, max: .3, trail: .07, vx: (Math.random() - .5) * 5, vy: Math.random() * 3 + 1, vz: (Math.random() - .5) * 5 }); }
+  const fl = new THREE.Mesh(pgeo('tp', () => new THREE.SphereGeometry(1, 8, 6)), addMat(0xffffff, .9)); fl.scale.setScalar(p.kind === 'orb' ? .5 : .28); fl.position.set(pos.x, 1, pos.z); scene.add(fl); G.fx.push({ mesh: fl, life: .15, max: .15, trail: p.kind === 'orb' ? .5 : .28 });
+}
+// projectile models: own procedural meshes (forward = +Z), shared geometry
+const PG = {};
+const pgeo = (k, f) => PG[k] || (PG[k] = f());
+const addMat = (c, o = 1) => new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: o, blending: THREE.AdditiveBlending, depthWrite: false });
+const PROJ_KIND = { w_soldier: 'bolt', w_witch: 'orb', m_swat: 'bullet', w_scifi: 'laser', m_astronaut: 'orb' };
+function projMesh(kind, color) {
+  const g = new THREE.Group();
+  const col = new THREE.Color(color);
+  if (kind === 'bolt') { // crossbow bolt: wood shaft, steel head, fletching
+    const shaft = new THREE.Mesh(pgeo('bs', () => { const q = new THREE.CylinderGeometry(.03, .03, .7, 6); q.rotateX(Math.PI / 2); return q; }), new THREE.MeshBasicMaterial({ color: 0xc9a46a }));
+    const head = new THREE.Mesh(pgeo('bh', () => { const q = new THREE.ConeGeometry(.07, .2, 6); q.rotateX(Math.PI / 2); q.translate(0, 0, .45); return q; }), new THREE.MeshBasicMaterial({ color: 0xdfe6ee }));
+    const fl = new THREE.Mesh(pgeo('bf', () => { const q = new THREE.PlaneGeometry(.16, .16); q.translate(0, 0, -.3); return q; }), new THREE.MeshBasicMaterial({ color: 0xb84a3a, side: THREE.DoubleSide }));
+    const fl2 = fl.clone(); fl2.rotation.z = Math.PI / 2; g.add(shaft, head, fl, fl2);
+    g.add(new THREE.Mesh(pgeo('bg', () => { const q = new THREE.CylinderGeometry(.05, .01, .6, 6, 1, true); q.rotateX(-Math.PI / 2); q.translate(0, 0, -.55); return q; }), addMat(0xffe2a8, .3)));
+  } else if (kind === 'orb') { // magic orb: bright core, soft halo, cross shards
+    g.add(new THREE.Mesh(pgeo('oc', () => new THREE.SphereGeometry(.11, 10, 8)), new THREE.MeshBasicMaterial({ color: col.clone().lerp(new THREE.Color(0xffffff), .75) })));
+    g.add(new THREE.Mesh(pgeo('oh', () => new THREE.SphereGeometry(.26, 12, 10)), addMat(color, .4)));
+    const sh = new THREE.Mesh(pgeo('os', () => new THREE.OctahedronGeometry(.2, 0)), addMat(color, .7)); sh.name = 'spin'; g.add(sh);
+  } else if (kind === 'laser') { // energy beam
+    g.add(new THREE.Mesh(pgeo('lc', () => { const q = new THREE.CylinderGeometry(.04, .04, 1.3, 6); q.rotateX(Math.PI / 2); return q; }), new THREE.MeshBasicMaterial({ color: 0xffffff })));
+    g.add(new THREE.Mesh(pgeo('lh', () => { const q = new THREE.CylinderGeometry(.11, .11, 1.4, 8); q.rotateX(Math.PI / 2); return q; }), addMat(color, .45)));
+  } else { // bullet: brass slug + tracer
+    g.add(new THREE.Mesh(pgeo('ul', () => { const q = new THREE.CapsuleGeometry(.05, .22, 3, 6); q.rotateX(Math.PI / 2); return q; }), new THREE.MeshBasicMaterial({ color: 0xffe9a8 })));
+    g.add(new THREE.Mesh(pgeo('ut', () => { const q = new THREE.CylinderGeometry(.035, .01, 1.1, 6, 1, true); q.rotateX(-Math.PI / 2); q.translate(0, 0, -.7); return q; }), addMat(color, .55)));
+  }
+  return g;
+}
+function shoot(from, to, dmg, color, onHit, kind = 'bullet') {
+  const m = projMesh(kind, color);
   m.position.set(from.x, 1.2, from.z); scene.add(m);
-  G.proj.push({ mesh: m, target: to, dmg, speed: 26, onHit });
+  G.proj.push({ mesh: m, target: to, dmg, speed: kind === 'orb' ? 20 : kind === 'bolt' ? 30 : 34, onHit, kind, color, tt: 0 });
 }
 const teamAtk = h => h.def.dmg * (h.mul || 1) * (h.gm ? h.gm.atk : 1) * G.bonus.atk * G.S.dmg * (h.def.ranged ? G.S.ranged : 1);
 
@@ -465,7 +502,7 @@ function heroAttack(h, tgt) {
   const a = play(h.inst, clip, { loop: false, fade: .08, speed: 1.4 });
   const crit = Math.random() < (d.crit || 0.05) ? 2 : 1;
   const dmg = teamAtk(h) * crit;
-  if (d.ranged) after(.18, () => tgt.alive && shoot(h.pos, tgt, dmg, d.color, e => damageEnemy(e, dmg)));
+  if (d.ranged) after(.18, () => tgt.alive && shoot(h.pos, tgt, dmg, d.color, e => damageEnemy(e, dmg), PROJ_KIND[h.def.id] || (d.anim && d.anim[0] === 'cast' ? 'orb' : 'bullet')));
   else after(.2, () => { if (!tgt.alive) return; damageEnemy(tgt, dmg); if (d.cleave) for (const e of G.enemies) if (e !== tgt && e.alive && e.pos.distanceTo(h.pos) < d.range + 1.2) damageEnemy(e, dmg * .5); });
 }
 function heroSkill(h) {
@@ -479,7 +516,7 @@ function heroSkill(h) {
     case 'pull': { const t = nearest(live, h.pos, 18); if (t) { ring(t.pos, sk.r * S.aoe * (h.skMul || 1), 0x9b6bdc, .6); G.enemies.forEach(e => { if (e.alive && !e.def.boss && e.pos.distanceTo(t.pos) < sk.r * S.aoe * (h.skMul || 1)) { e.pos.lerp(t.pos, .8); e.slow = 3; } }); used = true; } } break;
     case 'turret': if (live.length) { const m = new THREE.Mesh(new THREE.CylinderGeometry(.35, .5, .9, 8), new THREE.MeshStandardMaterial({ color: sk.color || 0x4aa3df, emissive: sk.color || 0x4aa3df, emissiveIntensity: .4 })); const p = h.pos.clone().add(new THREE.Vector3((Math.random() - .5) * 3, 0, (Math.random() - .5) * 3)); m.position.set(p.x, .45, p.z); scene.add(m); G.turrets.push({ mesh: m, pos: p, life: 12, cd: 0, dmg: sk.power * AT * S.turret, blocker: sk.blocker }); used = true; } break;
     case 'trap': if (live.length) { const t = nearest(live, h.pos, 18); const m = new THREE.Mesh(new THREE.CylinderGeometry(.6, .6, .1, 12), new THREE.MeshBasicMaterial({ color: 0xe67e22 })); m.position.set(t.pos.x, .06, t.pos.z); scene.add(m); G.turrets.push({ mesh: m, pos: t.pos.clone(), life: 10, trap: true, dmg: sk.power * AT * S.turret, r: 3 }); used = true; } break;
-    case 'volley': { const t = nearest(live, h.pos, 20); if (t) { const dmg = sk.power * AT * S.dmg * S.ranged; for (let i = 0; i < sk.n; i++) after(i * .08, () => { const tt = nearest(G.enemies.filter(e => e.alive), h.pos, 22); tt && shoot(h.pos, tt, dmg, h.def.color, e => damageEnemy(e, dmg)); }); used = true; } } break;
+    case 'volley': { const t = nearest(live, h.pos, 20); if (t) { const dmg = sk.power * AT * S.dmg * S.ranged; for (let i = 0; i < sk.n; i++) after(i * .08, () => { const tt = nearest(G.enemies.filter(e => e.alive), h.pos, 22); tt && shoot(h.pos, tt, dmg, h.def.color, e => damageEnemy(e, dmg), PROJ_KIND[h.def.id] || 'bullet'); }); used = true; } } break;
     case 'dash': { const t = nearest(live, h.pos, 20); if (t) { const dir = t.pos.clone().sub(h.pos).setY(0).normalize(); h.pos.copy(t.pos).addScaledVector(dir, -1.2); const dmg = sk.power * AT * S.dmg; G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < 2.8 && damageEnemy(e, dmg)); ring(t.pos, 2.8, 0xff5555, .3); used = true; } } break;
     case 'aura': G.heroes.forEach(x => x.buffT = 5 * (h.skMul || 1)); ring(h.pos, 2.6, 0xffe08a, .6); used = !!live.length; if (used) G.bonus.atk *= 1; break;
     case 'gold': G.earned += 0; used = false; h.skCd = 9999; break;
@@ -790,15 +827,23 @@ function update(dt) {
   for (let i = 0; i < G.enemies.length; i++) { const a = G.enemies[i]; if (!a.alive) continue; for (let j = i + 1; j < G.enemies.length; j++) { const b = G.enemies[j]; if (!b.alive) continue; tmp.copy(a.pos).sub(b.pos); const d = tmp.length(), r = (a.def.r + b.def.r); if (d < r && d > 1e-4) { tmp.multiplyScalar((r - d) / d * .25); a.pos.add(tmp); b.pos.sub(tmp); } } }
   G.enemies = G.enemies.filter(e => e.alive || e.dying > 0 || (scene.remove(e.inst.wrap), false));
   // projectiles
-  for (const p of G.proj) { if (!p.target.alive) { p.dead = true; continue; } tmp.copy(p.target.pos).setY(1); const d = tmp.clone().sub(p.mesh.position); const step = p.speed * dt; if (d.length() <= step + .3) { p.onHit(p.target); p.dead = true; } else p.mesh.position.addScaledVector(d.normalize(), step); }
+  for (const p of G.proj) {
+    if (!p.target.alive) { p.dead = true; continue; }
+    tmp.copy(p.target.pos).setY(1); const d = tmp.clone().sub(p.mesh.position); const step = p.speed * dt;
+    if (d.length() <= step + .3) { p.onHit(p.target); projHit(p); p.dead = true; }
+    else { const dir = d.normalize(); p.mesh.position.addScaledVector(dir, step); p.mesh.lookAt(p.mesh.position.x + dir.x, p.mesh.position.y + dir.y, p.mesh.position.z + dir.z); p.tt += dt;
+      const sp = p.mesh.getObjectByName('spin'); if (sp) { sp.rotation.x += dt * 9; sp.rotation.y += dt * 7; }
+      if (p.kind === 'orb' && (p.tg = (p.tg || 0) + dt) > .035) { p.tg = 0; trailPuff(p.mesh.position, p.color, .28, .3); }
+      else if (p.kind === 'bolt' && (p.tg = (p.tg || 0) + dt) > .05) { p.tg = 0; trailPuff(p.mesh.position, 0xffe2a8, .08, .18); } }
+  }
   G.proj = G.proj.filter(p => { if (p.dead) scene.remove(p.mesh); return !p.dead; });
   // turrets / traps
   for (const t of G.turrets) { t.life -= dt; t.cd -= dt;
     if (t.trap) { const hit = G.enemies.find(e => e.alive && e.pos.distanceTo(t.pos) < 1.2); if (hit) { G.enemies.forEach(e => e.alive && e.pos.distanceTo(t.pos) < t.r && (damageEnemy(e, t.dmg), e.slow = 3)); ring(t.pos, t.r, 0xe67e22); t.life = 0; } }
-    else if (t.cd <= 0) { const tg = nearest(G.enemies.filter(e => e.alive), t.pos, 14); if (tg) { t.cd = .6; shoot(t.pos, tg, t.dmg, 0x7fd0ff, e => damageEnemy(e, t.dmg)); } } }
+    else if (t.cd <= 0) { const tg = nearest(G.enemies.filter(e => e.alive), t.pos, 14); if (tg) { t.cd = .6; shoot(t.pos, tg, t.dmg, 0x7fd0ff, e => damageEnemy(e, t.dmg), 'laser'); } } }
   G.turrets = G.turrets.filter(t => { if (t.life <= 0) scene.remove(t.mesh); return t.life > 0; });
   // fx
-  for (const f of G.fx) { f.life -= dt; const k = 1 - f.life / f.max; f.mesh.scale.setScalar(.3 + k * .7 + .01); f.mesh.material.opacity = Math.max(0, .8 * (1 - k)); }
+  for (const f of G.fx) { f.life -= dt; const k = 1 - f.life / f.max; if (f.trail) { f.mesh.scale.setScalar(f.trail * (1 - k * .7)); f.mesh.material.opacity = .6 * (1 - k); if (f.vx !== undefined) { f.vy -= 9 * dt; f.mesh.position.x += f.vx * dt; f.mesh.position.y = Math.max(.05, f.mesh.position.y + f.vy * dt); f.mesh.position.z += f.vz * dt; } continue; } f.mesh.scale.setScalar(.3 + k * .7 + .01); f.mesh.material.opacity = Math.max(0, .8 * (1 - k)); }
   G.fx = G.fx.filter(f => { if (f.life <= 0) scene.remove(f.mesh); return f.life > 0; });
   if (!G.over && G.state !== 'wipe' && G.state !== 'init' && living.length === 0 && G.heroes.length) { G.state = 'wipe'; G.stT = 0; G.flames--; toast(G.flames > 0 ? '불꽃이 하나 꺼졌습니다' : '마지막 불꽃이 꺼졌습니다'); }
   // lantern glow
